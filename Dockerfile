@@ -36,7 +36,7 @@ COPY --from=builder /workspace/build/libs/*.jar /app/identity-hub.jar
 COPY --from=builder /workspace/config.properties /app/config.properties
 
 # Expose the ports used by identity hub
-EXPOSE 8181 8182 8183 8184 5005
+# EXPOSE 8181 8182 8183 8184 5005
 
 # Run the jar with config + logging
 CMD ["java", "-Dedc.fs.config=/app/config.properties", "-Dorg.slf4j.simpleLogger.defaultLogLevel=debug", "-jar", "/app/identity-hub.jar"]
