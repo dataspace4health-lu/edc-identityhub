@@ -1,0 +1,16 @@
+.gradle/
+.idea/
+build/
+**/build/
+.env
+*.iml
+.DS_Store
+.settings
+.project
+.classpath
+bin/
+*.hprof
+openapi.json
+**/out/
+.vscode/
+temp/
