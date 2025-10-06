@@ -13,14 +13,6 @@
  */
 
 
- java {
-    toolchain {
-        languageVersion.set(JavaLanguageVersion.of(17))
-        // If you MUST pin a vendor, use Adoptium:
-        // vendor.set(JvmVendorSpec.ADOPTIUM)
-    }
-}
-
 
 plugins {
     `java-library`
