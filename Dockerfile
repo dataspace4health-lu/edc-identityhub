@@ -15,9 +15,6 @@ RUN ./gradlew dependencies --no-daemon || return 0
 # Copy the rest of the source
 COPY . .
 
-# Make gradlew executable
-RUN chmod +x gradlew
-
 # Build the fat jar (skip tests for faster builds, remove -x test if you want them)
 RUN ./gradlew shadowJar --no-daemon -x test
 
