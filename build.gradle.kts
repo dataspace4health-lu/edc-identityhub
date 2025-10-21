@@ -12,10 +12,12 @@
  *
  */
 
+project.setProperty("mainClassName", "org.eclipse.edc.boot.system.runtime.BaseRuntime")
 
 
 plugins {
     `java-library`
+    id("checkstyle")
     id("application")
     alias(libs.plugins.shadow)
 }
@@ -60,7 +62,46 @@ application {
     mainClass.set("org.eclipse.edc.boot.system.runtime.BaseRuntime")
 }
 
+sourceSets {
+    main {
+        java {
+            // First, clear default srcDirs by removing them one by one
+            setSrcDirs(emptySet<File>())
+
+            // Find all directories named 'src' under 'extensions/**/src'
+            val srcFolders = file("extensions").walkTopDown()
+                .filter { it.isDirectory && it.name == "src" }
+                .toSet()
+
+            // Add those directories as source dirs
+            setSrcDirs(srcFolders)
+        }
+    }
+}
+
+checkstyle {
+    toolVersion = "12.0.0"
+    configFile = file("config/checkstyle/checkstyle.xml")
+    isShowViolations = true
+}
+
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
     mergeServiceFiles()
     archiveFileName.set("identity-hub.jar")
+}
+
+tasks.withType<Checkstyle> {
+    reports {
+        xml.required.set(false)
+        html.required.set(true)
+        html.outputLocation.set(file("$buildDir/reports/checkstyle/lint.html"))
+    }
+}
+
+tasks.test {
+    // Change the directory for HTML reports
+    reports.html.outputLocation.set(file("$buildDir/test-results/html/test.html"))
+
+    // Change the directory for JUnit XML test results
+    reports.junitXml.outputLocation.set(file("$buildDir/test-results/xml/test.xml"))
 }
