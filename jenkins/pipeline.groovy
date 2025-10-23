@@ -117,35 +117,47 @@ pipeline {
                 docker rmi -f ${IMAGE_NAME}
             """
         }
-//        success {
-// // TODO: Need SMTP configuration in Jenkins
-//             script {
-//                 mail to: "${env.COMMIT_AUTHOR}",
-//                     subject: "Build Succeeded: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-//                     body: """Hello,
+        success {
+            script {
+                def msg = """Hello,
 
-// The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has succeeded.
+The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has succeeded.
 
-// Please check the build logs here: ${env.BUILD_URL}
+Please check the build logs here: ${env.BUILD_URL}
 
-// Regards,
-// Jenkins"""
-//             }
-//        }
-//        failure {
-// // TODO: Need SMTP configuration in Jenkins
-//             script {
-//                 mail to: "${env.COMMIT_AUTHOR}",
-//                     subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-//                     body: """Hello,
+Regards,
+Jenkins"""
+                
+                try {
+                    mail to: "${env.COMMIT_AUTHOR}",
+                        subject: "Build Succeeded: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "${msg}"
+                }
+                catch (err) {
+                    echo "Error sending email: ${err}"
+                }
+            }
+        }
+        failure {
+            script {
+                def msg = """Hello,
 
-// The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has failed.
+The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has failed.
 
-// Please check the build logs here: ${env.BUILD_URL}
+Please check the build logs here: ${env.BUILD_URL}
 
-// Regards,
-// Jenkins"""
-//             }
-//        }
+Regards,
+Jenkins"""
+
+                try {
+                    mail to: "${env.COMMIT_AUTHOR}",
+                        subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "${msg}"
+                }
+                catch (err) {
+                    echo "Error sending email: ${err}"
+                }
+            }
+        }
     }
 }
