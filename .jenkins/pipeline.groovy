@@ -112,50 +112,38 @@ pipeline {
 
     post {
         always {
-            cleanWs()
-            sh """
-                docker rmi -f ${IMAGE_NAME}
-            """
-        }
-        success {
             script {
-                def msg = """Hello,
+                cleanWs()
+                sh """
+                    docker rmi -f ${IMAGE_NAME}
+                """
 
-The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has succeeded.
+                // Detect if build was triggered manually or by SCM
+                def causes = currentBuild.getBuildCauses()
+                def isManual = causes.any { it.toString().contains('UserIdCause') }
+                def isSCM = causes.any { it.toString().contains('SCMTrigger') || it.toString().contains('GitLabWebHookCause') }
 
-Please check the build logs here: ${env.BUILD_URL}
-
-Regards,
-Jenkins"""
-                
-                try {
-                    mail to: "${env.COMMIT_AUTHOR}",
-                        subject: "Build Succeeded: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                        body: "${msg}"
-                }
-                catch (err) {
-                    echo "Error sending email: ${err}"
-                }
-            }
-        }
-        failure {
-            script {
-                def msg = """Hello,
-
-The Jenkins build ${env.JOB_NAME} #${env.BUILD_NUMBER} has failed.
-
-Please check the build logs here: ${env.BUILD_URL}
-
-Regards,
-Jenkins"""
-
-                try {
-                    mail to: "${env.COMMIT_AUTHOR}",
-                        subject: "Build Failed: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-                        body: "${msg}"
-                }
-                catch (err) {
-                    echo "Error sending email: ${err}"
+                if (isManual) {
+                    echo "Build test triggered manually — sending email to Requester"
+                    emailext(
+                        recipientProviders: [[$class: 'RequesterRecipientProvider']],
+                        subject: "Manual Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "The manually triggered Jenkins build (${env.JOB_NAME} #${env.BUILD_NUMBER}) has completed with result: ${currentBuild.currentResult}.\n\nDetails: ${env.BUILD_URL}"
+                    )
+                } else if (isSCM) {
+                    echo "Build triggered by SCM — sending email to Developers"
+                    emailext(
+                        recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                        subject: "Committed Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "The Jenkins build was triggered by a code commit and has completed with result: ${currentBuild.currentResult}.\n\nDetails: ${env.BUILD_URL}"
+                    )
+                } else {
+                    echo "Build triggered by another cause — sending default notification"
+                    emailext(
+                        recipientProviders: [[$class: 'DevelopersRecipientProvider']],
+                        subject: "Build ${currentBuild.currentResult}: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                        body: "This build was triggered automatically or by another cause with result: ${currentBuild.currentResult}..\n\nDetails: ${env.BUILD_URL}"
+                    )
                 }
             }
         }
