@@ -63,7 +63,8 @@ pipeline {
                                 -Dsonar.projectKey=${DOCKER_IMAGE} \
                                 -Dsonar.sources=. \
                                 -Dsonar.java.binaries=extensions/**/build/classes/java/main \
-                                -Dsonar.java.libraries=build/libs,extensions/**/build/libs
+                                -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
+                                -Dsonar.branch.name=${env.GIT_BRANCH}
                         """
                     }
                 }
