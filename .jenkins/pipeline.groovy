@@ -112,11 +112,39 @@ pipeline {
                 expression { return params.PUBLISH_IMAGE == true }
             }
             steps {
-                // Replace with your internal/private registry push command
+                // Get latest tag
+                def tag = sh(
+                    script: "git describe --tags --abbrev=0 2>/dev/null || echo \"0.0.0\"", 
+                    returnStdout: true
+                ).trim()
+                tag = "${tag#v}" // Trim leading v
+                // Get version defined in the code
+                def version = sh(
+                    script: "grep '^version' build.gradle.kts | head -1 | sed -E 's/version *= *\"([^\"]+)\"/\\1/'",
+                    returnStdout: true
+                ).trim()
+                version = "${version#v}" // Trim leading v
+                version = "${version:-0.0.0}" // default to 0.0.0
+                if (version != tag) {
+                    error("❌ Version and Tag mismatch")
+                }
+                
+                // Set the Tag to: 
+                // 1. <version number> if there is a tag and the commit is the one of the tag
+                // 2. <version number>-<commit hash> if there is a tag but the commit is ahead
+                // 3. 0.0.0 if no tag exists
+                tag = sh(
+                    script: "git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo 0.0.0", 
+                    returnStdout: true
+                ).trim()
+                tag = "${tag#v}" // Trim leading v
+                
                 sh """
-                    echo "Pushing to private registry..."
-                    docker push ${IMAGE_NAME}
+                    echo "Tagging image ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}."
+                    docker tag ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}
                 """
+                // Save it in the build description
+                currentBuild.description = "Output=${DOCKER_IMAGE}:${tag}"
             }
         }
     }
@@ -125,14 +153,16 @@ pipeline {
         always {
             script {
                 cleanWs()
-                sh """
-                    docker rmi -f ${IMAGE_NAME}
-                """
-
+                
                 // Detect if build was triggered manually or by SCM
                 def causes = currentBuild.getBuildCauses()
                 def isManual = causes.any { it.toString().contains('UserIdCause') }
                 def isSCM = causes.any { it.toString().contains('SCMTrigger') || it.toString().contains('GitLabWebHookCause') }
+                def isUpstream = causes.any { it.toString().contains('UpstreamCause') }
+
+                sh """
+                    docker rmi -f ${IMAGE_NAME}
+                """
 
                 if (isManual) {
                     echo "Build test triggered manually — sending email to Requester"

@@ -11,16 +11,14 @@
  *       Bayerische Motoren Werke Aktiengesellschaft (BMW AG) - Initial API and Implementation
  *
  */
-
-project.setProperty("mainClassName", "org.eclipse.edc.boot.system.runtime.BaseRuntime")
-
-
 plugins {
     `java-library`
     id("checkstyle")
     id("application")
     alias(libs.plugins.shadow)
 }
+
+version = ""
 
 allprojects {
     apply(plugin = "java")
@@ -87,7 +85,7 @@ checkstyle {
 
 tasks.withType<com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar> {
     mergeServiceFiles()
-    archiveFileName.set("identity-hub.jar")
+    archiveClassifier.set("")
 }
 
 tasks.withType<Checkstyle> {
