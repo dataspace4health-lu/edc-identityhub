@@ -2,12 +2,9 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "${env.JOB_NAME.tokenize('/').last().toLowerCase()}"
+        DOCKER_IMAGE = "${env.JOB_NAME.tokenize('/')[-2..-1].join('-').toLowerCase()}"
         DOCKER_TAG = "${env.BUILD_NUMBER}"
         IMAGE_NAME = "${DOCKER_IMAGE}:${DOCKER_TAG}"
-        COMMIT_AUTHOR = sh(script: "git show -s --pretty='%an <%ae>' ${GIT_COMMIT}", returnStdout: true).trim()
-
-        GRADLEW = "./gradlew"
     }
 
     parameters {
@@ -20,7 +17,7 @@ pipeline {
                 sh """
                     docker build --target builder -t ${IMAGE_NAME} .
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} checkstyleMain checkstyleTest
+                        chmod +x ./gradlew && ./gradlew checkstyleMain checkstyleTest
                 """
             }
             post {
@@ -34,7 +31,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} shadowJar --no-daemon -x test
+                        chmod +x ./gradlew && ./gradlew shadowJar --no-daemon -x test
                 """
             }
         }
@@ -43,7 +40,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} test
+                        chmod +x ./gradlew && ./gradlew test
                 """
             }
             post {
