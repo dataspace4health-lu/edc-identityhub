@@ -30,10 +30,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy only the fat jar and configs from builder
 COPY --from=builder /workspace/build/libs/*.jar /app/identity-hub.jar
-COPY --from=builder /workspace/config.properties /app/config.properties
 
 # Expose the ports used by identity hub
 # EXPOSE 8181 8182 8183 8184 5005
 
 # Run the jar with config + logging
-CMD ["java", "-Dedc.fs.config=/app/config.properties", "-Dorg.slf4j.simpleLogger.defaultLogLevel=debug", "-jar", "/app/identity-hub.jar"]
+CMD ["java",  "-jar", "/app/identity-hub.jar"]
