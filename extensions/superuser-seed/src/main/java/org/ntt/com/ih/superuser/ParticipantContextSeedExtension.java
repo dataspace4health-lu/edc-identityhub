@@ -78,19 +78,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                         .roles(List.of(ServicePrincipal.ROLE_ADMIN))
                         .build())
                 .onSuccess(generatedKey -> {
-                    var apiKey = ofNullable(superUserApiKey)
-                            .map(key -> {
-                                if (!key.contains(".")) {
-                                    monitor.warning("Super-user key override: this key appears to have an invalid format, you may be unable to access some APIs. It must follow the structure: 'base64(<participantId>).<random-string>'");
-                                }
-                                participantContextService.getParticipantContext(superUserParticipantId)
-                                        .onSuccess(pc -> vault.storeSecret(pc.getApiTokenAlias(), key)
-                                                .onSuccess(u -> monitor.debug("Super-user key override successful"))
-                                                .onFailure(f -> monitor.warning("Error storing API key in vault: %s".formatted(f.getFailureDetail()))))
-                                        .onFailure(f -> monitor.warning("Error overriding API key for '%s': %s".formatted(superUserParticipantId, f.getFailureDetail())));
-                                return key;
-                            })
-                            .orElse(generatedKey.apiKey());
+                    var apiKey = generatedKey.apiKey();
                     monitor.info("Created user 'super-user'. Please take note of the API Key: %s".formatted(apiKey));
                 })
                 .orElseThrow(f -> new EdcException("Error creating Super-User: " + f.getFailureDetail()));
