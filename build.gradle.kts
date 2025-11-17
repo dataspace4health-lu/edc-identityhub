@@ -55,7 +55,6 @@ dependencies {
     implementation(libs.edc.did.core)
 
     implementation(libs.edc.vault.hashicorp)
-    implementation(libs.edc.bom.identityhub.sql)
     
     // Superuser seed extension
     runtimeOnly(project(":extensions:superuser-seed"))
@@ -64,7 +63,6 @@ dependencies {
     testImplementation(libs.edc.lib.crypto)
     testImplementation(libs.edc.lib.keys)
 
-    implementation(project(":extensions:superuser-seed"))
 
     
 }
