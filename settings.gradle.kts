@@ -1,4 +1,4 @@
 rootProject.name = "edc-identityhub"
-
-include(":extensions:superuser-seed")
-
+include("extensions")
+include("extensions:superuser-seed")
+findProject(":extensions:superuser-seed")?.name = "superuser-seed"

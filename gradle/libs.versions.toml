@@ -44,6 +44,9 @@ mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 edc-bom-identityhub = { module = "org.eclipse.edc:identityhub-bom", version.ref = "edc" }
 edc-bom-identityhub-sql = { module = "org.eclipse.edc:identityhub-feature-sql-bom", version.ref = "edc" }
 
+# vault
+edc-vault-hashicorp = { module = "org.eclipse.edc:vault-hashicorp", version.ref = "edc" }
+
 [plugins]
 shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }
 edc-build = { id = "org.eclipse.edc.edc-build", version.ref = "edc-build" }
