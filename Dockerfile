@@ -37,19 +37,4 @@ COPY logging.properties /app/logging.properties
 ENV LOG_LEVEL=DEBUG
 
 # Run the jar with config + logging
-CMD ["sh", "-c", "\
-case \"$LOG_LEVEL\" in \
-    DEBUG|debug|FINE) LEVEL=FINE ;; \
-    INFO|info) LEVEL=INFO ;; \
-    WARN|warn|WARNING) LEVEL=WARNING ;; \
-    ERROR|error|SEVERE) LEVEL=SEVERE ;; \
-    *) LEVEL=FINE ;; \
-esac; \
-cat > /app/logging.properties <<EOF\
-handlers = java.util.logging.ConsoleHandler\
-.level = $LEVEL\
-java.util.logging.ConsoleHandler.level = $LEVEL\
-java.util.logging.ConsoleHandler.formatter = java.util.logging.SimpleFormatter\
-java.util.logging.SimpleFormatter.format=%1$tF %1$tT %4$s %2$s - %5$s%6$s%n\
-EOF; \
-exec java -Djava.util.logging.config.file=/app/logging.properties -jar /app/identity-hub.jar"]
+CMD ["sh", "-c", "exec java -jar /app/identity-hub.jar --log-level=debug"]
