@@ -30,11 +30,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy only the fat jar and configs from builder
 COPY --from=builder /workspace/build/libs/*.jar /app/identity-hub.jar
-# Copy default java.util.logging config (can be overridden in image or mounted)
-COPY logging.properties /app/logging.properties
-
-# Default log level environment variable (can be overridden at runtime)
-ENV LOG_LEVEL=DEBUG
 
 # Run the jar with config + logging
-CMD ["sh", "-c", "exec java -jar /app/identity-hub.jar --log-level=debug"]
+CMD ["sh", "-c", "exec java -jar /app/identity-hub.jar --log-level=$LOG_LEVEL"]
