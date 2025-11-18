@@ -8,7 +8,8 @@ pipeline {
     }
 
     parameters {
-        booleanParam(name: 'PUBLISH_IMAGE', defaultValue: false, description: 'Publish Docker image after build')
+        // booleanParam(name: 'PUBLISH_IMAGE', defaultValue: false, description: 'Publish Docker image after build')
+        choice(name: 'PUBLISH_IMAGE', choices: ['', 'ds4h-registry:5432', 'ds4hacrshared.azurecr.io'], description: 'Publish Docker image after build to this repo')
     }
 
     stages {
@@ -106,7 +107,8 @@ pipeline {
 
         stage('Publish Docker Image') {
             when {
-                expression { return params.PUBLISH_IMAGE == true }
+                // expression { return params.PUBLISH_IMAGE == true }
+                expression { return params.PUBLISH_IMAGE != '' }
             }
             steps {
                 script {
@@ -138,11 +140,13 @@ pipeline {
                     tag = tag.replaceFirst(/^v/, "") // Trim leading v
                     
                     sh """
-                        echo "Tagging image ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}."
-                        docker tag ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}
+                        echo "Tagging image ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
+                        docker tag ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
+                        echo "Pushing image ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
+                        docker push ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
                     """
                     // Save it in the build description
-                    currentBuild.description = "Output=${DOCKER_IMAGE}:${tag}"
+                    currentBuild.description = "BuiltImage=${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}"
                 }
             }
         }
