@@ -8,7 +8,6 @@ pipeline {
     }
 
     parameters {
-        // booleanParam(name: 'PUBLISH_IMAGE', defaultValue: false, description: 'Publish Docker image after build')
         choice(name: 'PUBLISH_IMAGE', choices: ['', 'ds4h-registry:5432', 'ds4hacrshared.azurecr.io'], description: 'Publish Docker image after build to this repo')
     }
 
@@ -107,7 +106,6 @@ pipeline {
 
         stage('Publish Docker Image') {
             when {
-                // expression { return params.PUBLISH_IMAGE == true }
                 expression { return params.PUBLISH_IMAGE != '' }
             }
             steps {
