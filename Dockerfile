@@ -15,10 +15,7 @@ RUN ./gradlew dependencies --no-daemon || return 0
 # Copy the rest of the source
 COPY . .
 
-# Remove test files to avoid compilation issues during build
-RUN find extensions -type d -name "test" -exec rm -rf {} + || true
-
-# Build the fat jar (skip tests for faster builds)
+# Build the fat jar (skip tests for faster builds, remove -x test if you want them)
 RUN ./gradlew shadowJar --no-daemon -x test
 
 

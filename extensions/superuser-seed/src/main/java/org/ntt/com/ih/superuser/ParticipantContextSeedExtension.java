@@ -37,9 +37,11 @@ import static java.util.Optional.ofNullable;
  * 
  * This extension:
  * - Retrieves API key from Vault on startup
- * - Creates super-user if not exists
+ * - Creates super-user if not exists (only one super-user per deployment)
  * - Stores API key in Vault for persistence
- * - Supports graceful fallback for backward compatibility
+ * 
+ * Note: Only one super-user should exist per deployment. If configuration changes
+ * (edc.ih.api.superuser.id), the extension will detect existing super-user and skip creation.
  */
 public class ParticipantContextSeedExtension implements ServiceExtension {
     public static final String NAME = "ParticipantContext Seed Extension";
@@ -51,12 +53,8 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     @Setting(value = "Super-user participant ID", defaultValue = DEFAULT_SUPER_USER_PARTICIPANT_ID)
     public static final String SUPERUSER_PARTICIPANT_ID_PROPERTY = "edc.ih.api.superuser.id";
     
-    @Setting(value = "Fallback API key from config (deprecated, use Vault)")
-    public static final String SUPERUSER_APIKEY_PROPERTY = "edc.ih.api.superuser.key";
-    
     private String superUserParticipantId;
     private String vaultApiKeyPath;
-    private String fallbackApiKey;
     private Monitor monitor;
     
     @Inject
@@ -74,12 +72,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     public void initialize(ServiceExtensionContext context) {
         superUserParticipantId = context.getSetting(SUPERUSER_PARTICIPANT_ID_PROPERTY, DEFAULT_SUPER_USER_PARTICIPANT_ID);
         vaultApiKeyPath = context.getSetting(SUPERUSER_VAULT_APIKEY_PATH, "super-user-apikey");
-        fallbackApiKey = context.getSetting(SUPERUSER_APIKEY_PROPERTY, null);
         monitor = context.getMonitor();
-        
-        if (fallbackApiKey != null && !fallbackApiKey.equals("change-me")) {
-            monitor.warning("Using fallback API key from configuration. This is deprecated and insecure for production. Please store the API key in Vault instead.");
-        }
         
         monitor.info("Vault-backed super-user initialization enabled (ID: %s, Path: %s)".formatted(superUserParticipantId, vaultApiKeyPath));
     }
@@ -111,11 +104,10 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                         .roles(List.of(ServicePrincipal.ROLE_ADMIN))
                         .build())
                 .onSuccess(generatedKey -> {
-                    // Priority: Vault > Config > Generated
+                    // Priority: Vault > Generated
                     var vaultApiKey = vault.resolveSecret(vaultApiKeyPath);
                     var apiKey = ofNullable(vaultApiKey)
                             .filter(key -> !key.isEmpty())
-                            .or(() -> ofNullable(fallbackApiKey).filter(key -> !key.equals("change-me")))
                             .orElse(generatedKey.apiKey());
                     
                     // Validate format
@@ -131,7 +123,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                                     .onFailure(f -> monitor.warning("Failed to store key in participant alias: " + f.getFailureDetail())))
                             .onFailure(f -> monitor.warning("Failed to retrieve participant context: " + f.getFailureDetail()));
                     
-                    monitor.info("Super-user created successfully! Participant ID: %s, API Key: %s".formatted(superUserParticipantId, maskApiKey(apiKey)));
+                    monitor.info("Super-user created successfully! Participant ID: %s".formatted(superUserParticipantId));
                 })
                 .orElseThrow(f -> new EdcException("Failed to create super-user: " + f.getFailureDetail()));
     }
@@ -157,15 +149,25 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     }
     
     private void persistToVault(String apiKey) {
-        vault.storeSecret(vaultApiKeyPath, apiKey)
-                .onSuccess(u -> monitor.info("API key persisted to Vault: " + vaultApiKeyPath))
-                .onFailure(f -> monitor.severe("CRITICAL: Failed to persist API key to Vault (Path: %s, Error: %s). API key will be lost on pod restart!".formatted(vaultApiKeyPath, f.getFailureDetail())));
+        persistToVaultWithRetry(apiKey, 3);
     }
     
-    private String maskApiKey(String apiKey) {
-        if (apiKey == null || apiKey.length() <= 20) {
-            return "***";
-        }
-        return apiKey.substring(0, 10) + "..." + apiKey.substring(apiKey.length() - 10);
+    private void persistToVaultWithRetry(String apiKey, int attemptsLeft) {
+        vault.storeSecret(vaultApiKeyPath, apiKey)
+                .onSuccess(u -> monitor.info("API key persisted to Vault: " + vaultApiKeyPath))
+                .onFailure(f -> {
+                    if (attemptsLeft > 1) {
+                        monitor.warning("Failed to persist API key to Vault (attempts left: %d). Retrying...".formatted(attemptsLeft - 1));
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        persistToVaultWithRetry(apiKey, attemptsLeft - 1);
+                    } else {
+                        monitor.severe("CRITICAL: Failed to persist API key to Vault after all retries (Path: %s, Error: %s). API key will be lost on pod restart!".formatted(vaultApiKeyPath, f.getFailureDetail()));
+                        throw new EdcException("Failed to persist super-user API key to Vault: " + f.getFailureDetail());
+                    }
+                });
     }
 }
