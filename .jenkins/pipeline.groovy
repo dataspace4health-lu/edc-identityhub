@@ -52,27 +52,29 @@ pipeline {
 
         stage("Code Quality Check (SonarQube)") {
             steps {
-                withSonarQubeEnv('sonar') {
-                    script {
-                        def scannerHome = tool "sonar"
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner -X \
-                                -Dsonar.projectKey=${DOCKER_IMAGE} \
-                                -Dsonar.sources=. \
-                                -Dsonar.java.binaries=extensions/**/build/classes/java/main \
-                                -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
-                                -Dsonar.branch.name=${env.GIT_BRANCH.replaceFirst("^origin/", "")}
-                        """
+                script {
+                    withSonarQubeEnv('sonar') {
+                        script {
+                            def scannerHome = tool "sonar"
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner -X \
+                                    -Dsonar.projectKey=${DOCKER_IMAGE} \
+                                    -Dsonar.sources=. \
+                                    -Dsonar.java.binaries=extensions/**/build/classes/java/main \
+                                    -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
+                                    -Dsonar.branch.name=${env.GIT_BRANCH.replaceFirst("^origin/", "")}
+                            """
+                        }
+                    }
 
-                        // // Wait for the Quality Gate result
-                        // timeout(time: 10, unit: 'MINUTES') {
-                        //     def qg = waitForQualityGate()
-                        //     if (qg.status != 'OK') {
-                        //         error "❌ Quality Gate failed: ${qg.status}"
-                        //     } else {
-                        //         echo "✅ Quality Gate passed: ${qg.status}"
-                        //     }
-                        // }
+                    // Wait for the Quality Gate result
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "❌ Quality Gate failed: ${qg.status}"
+                        } else {
+                            echo "✅ Quality Gate passed: ${qg.status}"
+                        }
                     }
                 }
             }
