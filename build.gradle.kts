@@ -58,6 +58,7 @@ dependencies {
     
     // Superuser seed extension
     runtimeOnly(project(":extensions:superuser-seed"))
+    implementation(libs.edc.bom.identityhub.sql)
     
     testImplementation(libs.edc.spi.identity.did)
     testImplementation(libs.edc.lib.crypto)

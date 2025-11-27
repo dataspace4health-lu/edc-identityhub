@@ -2,16 +2,13 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_IMAGE = "${env.JOB_NAME.tokenize('/').last().toLowerCase()}"
+        DOCKER_IMAGE = "${env.JOB_NAME.tokenize('/').dropRight(1).takeRight(1).join('-').toLowerCase()}"
         DOCKER_TAG = "${env.BUILD_NUMBER}"
         IMAGE_NAME = "${DOCKER_IMAGE}:${DOCKER_TAG}"
-        COMMIT_AUTHOR = sh(script: "git show -s --pretty='%an <%ae>' ${GIT_COMMIT}", returnStdout: true).trim()
-
-        GRADLEW = "./gradlew"
     }
 
     parameters {
-        booleanParam(name: 'PUBLISH_IMAGE', defaultValue: false, description: 'Publish Docker image after build')
+        choice(name: 'PUBLISH_IMAGE', choices: ['', 'ds4h-registry:5432', 'ds4hacrshared.azurecr.io'], description: 'Publish Docker image after build to this repo')
     }
 
     stages {
@@ -20,7 +17,7 @@ pipeline {
                 sh """
                     docker build --target builder -t ${IMAGE_NAME} .
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} checkstyleMain checkstyleTest
+                        chmod +x ./gradlew && ./gradlew checkstyleMain checkstyleTest
                 """
             }
             post {
@@ -34,7 +31,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} shadowJar --no-daemon -x test
+                        chmod +x ./gradlew && ./gradlew shadowJar --no-daemon -x test
                 """
             }
         }
@@ -43,7 +40,7 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ${GRADLEW} && ${GRADLEW} test
+                        chmod +x ./gradlew && ./gradlew test
                 """
             }
             post {
@@ -55,27 +52,29 @@ pipeline {
 
         stage("Code Quality Check (SonarQube)") {
             steps {
-                withSonarQubeEnv('sonar') {
-                    script {
-                        def scannerHome = tool "sonar"
-                        sh """
-                            ${scannerHome}/bin/sonar-scanner -X \
-                                -Dsonar.projectKey=${DOCKER_IMAGE} \
-                                -Dsonar.sources=. \
-                                -Dsonar.java.binaries=extensions/**/build/classes/java/main \
-                                -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
-                                -Dsonar.branch.name=${env.GIT_BRANCH.replaceFirst("^origin/", "")}
-                        """
+                script {
+                    withSonarQubeEnv('sonar') {
+                        script {
+                            def scannerHome = tool "sonar"
+                            sh """
+                                ${scannerHome}/bin/sonar-scanner -X \
+                                    -Dsonar.projectKey=${DOCKER_IMAGE} \
+                                    -Dsonar.sources=. \
+                                    -Dsonar.java.binaries=extensions/**/build/classes/java/main \
+                                    -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
+                                    -Dsonar.branch.name=${env.GIT_BRANCH.replaceFirst("^origin/", "")}
+                            """
+                        }
+                    }
 
-                        // // Wait for the Quality Gate result
-                        // timeout(time: 10, unit: 'MINUTES') {
-                        //     def qg = waitForQualityGate()
-                        //     if (qg.status != 'OK') {
-                        //         error "❌ Quality Gate failed: ${qg.status}"
-                        //     } else {
-                        //         echo "✅ Quality Gate passed: ${qg.status}"
-                        //     }
-                        // }
+                    // Wait for the Quality Gate result
+                    timeout(time: 10, unit: 'MINUTES') {
+                        def qg = waitForQualityGate()
+                        if (qg.status != 'OK') {
+                            error "❌ Quality Gate failed: ${qg.status}"
+                        } else {
+                            echo "✅ Quality Gate passed: ${qg.status}"
+                        }
                     }
                 }
             }
@@ -109,7 +108,7 @@ pipeline {
 
         stage('Publish Docker Image') {
             when {
-                expression { return params.PUBLISH_IMAGE == true }
+                expression { return params.PUBLISH_IMAGE != '' }
             }
             steps {
                 script {
@@ -141,11 +140,13 @@ pipeline {
                     tag = tag.replaceFirst(/^v/, "") // Trim leading v
                     
                     sh """
-                        echo "Tagging image ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}."
-                        docker tag ${IMAGE_NAME} ${DOCKER_IMAGE}:${tag}
+                        echo "Tagging image ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
+                        docker tag ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
+                        echo "Pushing image ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
+                        docker push ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
                     """
                     // Save it in the build description
-                    currentBuild.description = "Output=${DOCKER_IMAGE}:${tag}"
+                    currentBuild.description = "BuiltImage=${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}"
                 }
             }
         }

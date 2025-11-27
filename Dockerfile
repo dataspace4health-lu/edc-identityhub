@@ -23,6 +23,9 @@ RUN ./gradlew shadowJar --no-daemon -x test
 FROM eclipse-temurin:17-jre
 WORKDIR /app
 
+# Set default log level (can be overridden at runtime)
+ENV LOG_LEVEL=info
+
 # Install helper tools if needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl jq \
@@ -31,5 +34,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy only the fat jar and configs from builder
 COPY --from=builder /workspace/build/libs/*.jar /app/identity-hub.jar
 
-# Run the jar with config + logging
+# Run the jar with config + logging level
 CMD ["sh", "-c", "exec java -jar /app/identity-hub.jar --log-level=$LOG_LEVEL"]
