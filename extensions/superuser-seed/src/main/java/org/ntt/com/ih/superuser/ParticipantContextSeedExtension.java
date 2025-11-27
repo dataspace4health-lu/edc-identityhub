@@ -53,7 +53,11 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     @Setting(value = "Super-user participant ID", defaultValue = DEFAULT_SUPER_USER_PARTICIPANT_ID)
     public static final String SUPERUSER_PARTICIPANT_ID_PROPERTY = "edc.ih.api.superuser.id";
     
+    @Setting(value = "Super-user DID (Decentralized Identifier)", defaultValue = "did:web:super-user")
+    public static final String SUPERUSER_DID_PROPERTY = "edc.ih.api.superuser.did";
+    
     private String superUserParticipantId;
+    private String superUserDid;
     private String vaultApiKeyPath;
     private Monitor monitor;
     
@@ -72,9 +76,10 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     public void initialize(ServiceExtensionContext context) {
         superUserParticipantId = context.getSetting(SUPERUSER_PARTICIPANT_ID_PROPERTY, DEFAULT_SUPER_USER_PARTICIPANT_ID);
         vaultApiKeyPath = context.getSetting(SUPERUSER_VAULT_APIKEY_PATH, "super-user-apikey");
+        superUserDid = context.getSetting(SUPERUSER_DID_PROPERTY, "did:web:%s".formatted(superUserParticipantId));
         monitor = context.getMonitor();
         
-        monitor.info("Vault-backed super-user initialization enabled (ID: %s, Path: %s)".formatted(superUserParticipantId, vaultApiKeyPath));
+        monitor.info("Vault-backed super-user initialization enabled (ID: %s, DID: %s, Path: %s)".formatted(superUserParticipantId, superUserDid, vaultApiKeyPath));
     }
 
     @Override
@@ -94,7 +99,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
         participantContextService.createParticipantContext(
                 ParticipantManifest.Builder.newInstance()
                         .participantId(superUserParticipantId)
-                        .did("did:web:%s".formatted(superUserParticipantId))
+                        .did(superUserDid)
                         .active(true)
                         .key(KeyDescriptor.Builder.newInstance()
                                 .keyGeneratorParams(Map.of("algorithm", "EdDSA", "curve", "Ed25519"))
