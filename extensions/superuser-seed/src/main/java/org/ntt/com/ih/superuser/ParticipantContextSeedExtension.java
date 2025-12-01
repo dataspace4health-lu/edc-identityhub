@@ -272,7 +272,6 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                         return generatedKey.apiKey();
                     });
             
-            //monitor.info("[SuperUserSeed]   API Key: %s".formatted(apiKey));
             monitor.info("[SuperUserSeed]   API Key Length: %d characters".formatted(apiKey.length()));
             monitor.info(LOG_SUBSEPARATOR);
             
