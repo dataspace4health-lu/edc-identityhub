@@ -265,6 +265,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                             monitor.warning("[SuperUserSeed]   Expected: 'base64(<participantId>).<random-string>'");
                             monitor.warning("[SuperUserSeed]   This may cause authentication issues.");
                         }
+                        // TODO: Uncomment if you want to replace the auto-generated API key with the override
                         return true;
                     })
                     .orElseGet(() -> {
