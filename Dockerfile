@@ -12,9 +12,9 @@ RUN chmod +x gradlew
 # Download dependencies (cached unless build files change)
 RUN ./gradlew dependencies --no-daemon || return 0
 
-# Copy the rest of the source
-# Note: this relies on a .dockerignore to avoid copying secrets, build outputs, and VCS metadata
-COPY . .
+# Copy source files explicitly (avoids recursive copy of entire directory)
+COPY config ./config
+COPY extensions ./extensions
 
 # Build the fat jar (skip tests for faster builds, remove -x test if you want them)
 RUN ./gradlew shadowJar --no-daemon -x test

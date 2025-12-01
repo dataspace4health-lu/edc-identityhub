@@ -58,7 +58,6 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     // Log message constants
     private static final String LOG_SEPARATOR = "========================================";
     private static final String LOG_SUBSEPARATOR = "----------------------------------------";
-    private static final String LOG_NOT_FOUND = "  ✗ NOT FOUND in vault";
     
     @Setting(description = "Super-user participant ID", defaultValue = DEFAULT_SUPER_USER_PARTICIPANT_ID)
     public static final String SUPERUSER_PARTICIPANT_ID_PROPERTY = "edc.ih.api.superuser.id";
@@ -252,10 +251,14 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
             return false;
         }
         
+        var apiKeyAlias = participantContext.getApiTokenAlias();
+        var privateKeyAlias = "%s-alias".formatted(superUserParticipantId);
+        var stsSecretAlias = "%s-sts-client-secret".formatted(superUserParticipantId);
+        
         int secretsFound = 0;
-        secretsFound += checkApiKeySecret(participantContext) ? 1 : 0;
-        secretsFound += checkPrivateKeySecret() ? 1 : 0;
-        secretsFound += checkStsSecret() ? 1 : 0;
+        secretsFound += checkVaultSecret(apiKeyAlias, "API Key") ? 1 : 0;
+        secretsFound += checkVaultSecret(privateKeyAlias, "Private Key") ? 1 : 0;
+        secretsFound += checkVaultSecret(stsSecretAlias, "STS Client Secret") ? 1 : 0;
         
         return logVerificationSummary(secretsFound);
     }
@@ -273,36 +276,22 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
         return pc;
     }
     
-    private boolean checkApiKeySecret(ParticipantContext pc) {
-        var apiKeyAlias = pc.getApiTokenAlias();
-        var apiKey = vault.resolveSecret(apiKeyAlias);
+    /**
+     * Generic method to check if a vault secret exists.
+     * @param secretAlias the alias/key of the secret in the vault
+     * @param secretName human-readable name for logging purposes
+     * @return true if secret exists and is not empty, false otherwise
+     */
+    private boolean checkVaultSecret(String secretAlias, String secretName) {
+        monitor.debug("Checking vault secret: %s (alias: %s)".formatted(secretName, secretAlias));
+        var secret = vault.resolveSecret(secretAlias);
         
-        if (apiKey == null || apiKey.isEmpty()) {
-            monitor.warning(LOG_NOT_FOUND);
+        if (secret == null || secret.isEmpty()) {
+            monitor.warning("  ✗ %s NOT FOUND in vault (alias: %s)".formatted(secretName, secretAlias));
             return false;
         }
-        return true;
-    }
-    
-    private boolean checkPrivateKeySecret() {
-        var privateKeyAlias = "%s-alias".formatted(superUserParticipantId);
-        var privateKey = vault.resolveSecret(privateKeyAlias);
         
-        if (privateKey == null || privateKey.isEmpty()) {
-            monitor.warning(LOG_NOT_FOUND);
-            return false;
-        }
-        return true;
-    }
-    
-    private boolean checkStsSecret() {
-        var stsSecretAlias = "%s-sts-client-secret".formatted(superUserParticipantId);
-        var stsSecret = vault.resolveSecret(stsSecretAlias);
-        
-        if (stsSecret == null || stsSecret.isEmpty()) {
-            monitor.warning(LOG_NOT_FOUND);
-            return false;
-        }
+        monitor.debug("  ✓ %s found in vault".formatted(secretName));
         return true;
     }
     
