@@ -49,18 +49,26 @@ import static java.util.Optional.ofNullable;
  * - {participantId}-sts-client-secret: STS OAuth client secret
  */
 public class ParticipantContextSeedExtension implements ServiceExtension {
-    public static final String NAME = "ParticipantContext Seed Extension";
+    public static final String EXTENSION_NAME = "ParticipantContext Seed Extension";
     public static final String DEFAULT_SUPER_USER_PARTICIPANT_ID = "super-user";
     private static final int MAX_RETRIES = 5;
     private static final long RETRY_DELAY_MS = 2000;
     
-    @Setting(value = "Super-user participant ID", defaultValue = DEFAULT_SUPER_USER_PARTICIPANT_ID)
+    // Log message constants
+    private static final String LOG_SEPARATOR = "[SuperUserSeed] ========================================";
+    private static final String LOG_SUBSEPARATOR = "[SuperUserSeed] ----------------------------------------";
+    private static final String LOG_ALIAS_FORMAT = "[SuperUserSeed]   Alias: %s";
+    private static final String LOG_NOT_FOUND = "[SuperUserSeed]   ✗ NOT FOUND in vault";
+    private static final String LOG_FOUND = "[SuperUserSeed]   ✓ FOUND in vault";
+    private static final String LOG_VALUE_LENGTH = "[SuperUserSeed]   Value length: %d characters";
+    
+    @Setting(description = "Super-user participant ID", defaultValue = DEFAULT_SUPER_USER_PARTICIPANT_ID)
     public static final String SUPERUSER_PARTICIPANT_ID_PROPERTY = "edc.ih.api.superuser.id";
     
-    @Setting(value = "Super-user DID (Decentralized Identifier)", defaultValue = "")
+    @Setting(description = "Super-user DID (Decentralized Identifier)", defaultValue = "")
     public static final String SUPERUSER_DID_PROPERTY = "edc.ih.api.superuser.did";
     
-    @Setting(value = "Explicitly set the initial API key for the super-user")
+    @Setting(description = "Explicitly set the initial API key for the super-user")
     public static final String SUPERUSER_APIKEY_OVERRIDE_PROPERTY = "edc.ih.api.superuser.key";
     
     private String superUserParticipantId;
@@ -76,16 +84,16 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
 
     @Override
     public String name() {
-        return NAME;
+        return EXTENSION_NAME;
     }
 
     @Override
     public void initialize(ServiceExtensionContext context) {
         monitor = context.getMonitor();
         
-        monitor.info("[SuperUserSeed] ========================================");
+        monitor.info(LOG_SEPARATOR);
         monitor.info("[SuperUserSeed] Initializing ParticipantContext Seed Extension");
-        monitor.info("[SuperUserSeed] ========================================");
+        monitor.info(LOG_SEPARATOR);
         
         superUserParticipantId = context.getSetting(SUPERUSER_PARTICIPANT_ID_PROPERTY, DEFAULT_SUPER_USER_PARTICIPANT_ID);
         monitor.info("[SuperUserSeed] Configuration - Participant ID: %s".formatted(superUserParticipantId));
@@ -109,67 +117,102 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
 
     @Override
     public void start() {
-        monitor.info("[SuperUserSeed] ========================================");
-        monitor.info("[SuperUserSeed] Starting super-user bootstrap process");
-        monitor.info("[SuperUserSeed] Max retries: %d, Delay: %dms".formatted(MAX_RETRIES, RETRY_DELAY_MS));
-        monitor.info("[SuperUserSeed] ========================================");
+        logBootstrapStart();
         
         for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-            monitor.info("[SuperUserSeed] ----------------------------------------");
-            monitor.info("[SuperUserSeed] Attempt %d/%d".formatted(attempt, MAX_RETRIES));
-            monitor.info("[SuperUserSeed] ----------------------------------------");
+            logAttempt(attempt);
             
-            // Check if super-user already exists
-            monitor.info("[SuperUserSeed] Checking if super-user '%s' already exists...".formatted(superUserParticipantId));
-            var existingContext = participantContextService.getParticipantContext(superUserParticipantId);
-            
-            if (existingContext.succeeded()) {
-                monitor.info("[SuperUserSeed] ✓ Super-user already exists: %s".formatted(superUserParticipantId));
-                monitor.info("[SuperUserSeed] Verifying vault secrets...");
-                
-                if (verifyVaultSecrets()) {
-                    monitor.info("[SuperUserSeed] ✓ All vault secrets verified!");
-                    monitor.info("[SuperUserSeed] ========================================");
-                    monitor.info("[SuperUserSeed] ✓ Bootstrap complete (existing super-user)");
-                    monitor.info("[SuperUserSeed] ========================================");
-                    return;
-                } else {
-                    monitor.warning("[SuperUserSeed] ⚠ Vault secrets missing for existing participant");
-                    monitor.warning("[SuperUserSeed] This may indicate a corrupted state");
-                }
-            } else {
-                monitor.info("[SuperUserSeed] Super-user does not exist, proceeding with creation...");
-                
-                if (createSuperUser()) {
-                    monitor.info("[SuperUserSeed] ✓ Super-user created, verifying vault secrets...");
-                    
-                    if (verifyVaultSecrets()) {
-                        monitor.info("[SuperUserSeed] ✓ All vault secrets verified!");
-                        monitor.info("[SuperUserSeed] ========================================");
-                        monitor.info("[SuperUserSeed] ✓ Bootstrap complete (new super-user)");
-                        monitor.info("[SuperUserSeed] ========================================");
-                        return;
-                    } else {
-                        monitor.warning("[SuperUserSeed] ⚠ Vault secrets not yet available after creation");
-                    }
-                } else {
-                    monitor.warning("[SuperUserSeed] ⚠ Failed to create super-user on attempt %d".formatted(attempt));
-                }
+            if (tryBootstrap()) {
+                logBootstrapSuccess();
+                return;
             }
             
-            // Retry logic
-            if (attempt < MAX_RETRIES) {
-                monitor.info("[SuperUserSeed] Waiting %dms before retry...".formatted(RETRY_DELAY_MS));
-                try {
-                    Thread.sleep(RETRY_DELAY_MS);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    monitor.warning("[SuperUserSeed] ⚠ Bootstrap interrupted");
-                    return;
-                }
+            if (!waitForRetry(attempt)) {
+                return;
             }
         }
         
+        handleBootstrapFailure();
+    }
+    
+    private void logBootstrapStart() {
+        monitor.info(LOG_SEPARATOR);
+        monitor.info("[SuperUserSeed] Starting super-user bootstrap process");
+        monitor.info("[SuperUserSeed] Max retries: %d, Delay: %dms".formatted(MAX_RETRIES, RETRY_DELAY_MS));
+        monitor.info(LOG_SEPARATOR);
+    }
+    
+    private void logAttempt(int attempt) {
+        monitor.info(LOG_SUBSEPARATOR);
+        monitor.info("[SuperUserSeed] Attempt %d/%d".formatted(attempt, MAX_RETRIES));
+        monitor.info(LOG_SUBSEPARATOR);
+    }
+    
+    private boolean tryBootstrap() {
+        monitor.info("[SuperUserSeed] Checking if super-user '%s' already exists...".formatted(superUserParticipantId));
+        var existingContext = participantContextService.getParticipantContext(superUserParticipantId);
+        
+        if (existingContext.succeeded()) {
+            return handleExistingSuperUser();
+        } else {
+            return handleNewSuperUser();
+        }
+    }
+    
+    private boolean handleExistingSuperUser() {
+        monitor.info("[SuperUserSeed] ✓ Super-user already exists: %s".formatted(superUserParticipantId));
+        monitor.info("[SuperUserSeed] Verifying vault secrets...");
+        
+        if (verifyVaultSecrets()) {
+            return true;
+        } else {
+            monitor.warning("[SuperUserSeed] ⚠ Vault secrets missing for existing participant");
+            monitor.warning("[SuperUserSeed] This may indicate a corrupted state");
+            return false;
+        }
+    }
+    
+    private boolean handleNewSuperUser() {
+        monitor.info("[SuperUserSeed] Super-user does not exist, proceeding with creation...");
+        
+        if (createSuperUser()) {
+            monitor.info("[SuperUserSeed] ✓ Super-user created, verifying vault secrets...");
+            
+            if (verifyVaultSecrets()) {
+                return true;
+            } else {
+                monitor.warning("[SuperUserSeed] ⚠ Vault secrets not yet available after creation");
+                return false;
+            }
+        } else {
+            monitor.warning("[SuperUserSeed] ⚠ Failed to create super-user");
+            return false;
+        }
+    }
+    
+    private boolean waitForRetry(int attempt) {
+        if (attempt < MAX_RETRIES) {
+            monitor.info("[SuperUserSeed] Waiting %dms before retry...".formatted(RETRY_DELAY_MS));
+            try {
+                Thread.sleep(RETRY_DELAY_MS);
+                return true;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                monitor.warning("[SuperUserSeed] ⚠ Bootstrap interrupted");
+                return false;
+            }
+        }
+        return false;
+    }
+    
+    private void logBootstrapSuccess() {
+        monitor.info("[SuperUserSeed] ✓ All vault secrets verified!");
+        monitor.info(LOG_SEPARATOR);
+        monitor.info("[SuperUserSeed] ✓ Bootstrap complete");
+        monitor.info(LOG_SEPARATOR);
+    }
+    
+    private void handleBootstrapFailure() {
         monitor.severe("[SuperUserSeed] ✗ CRITICAL: Failed to bootstrap super-user after %d attempts!".formatted(MAX_RETRIES));
         monitor.severe("[SuperUserSeed] Check database connectivity, HashiCorp Vault, and permissions");
         throw new EdcException("Failed to bootstrap super-user after " + MAX_RETRIES + " attempts");
@@ -180,7 +223,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
      * @return true if creation succeeded, false otherwise
      */
     private boolean createSuperUser() {
-        monitor.info("[SuperUserSeed] ----------------------------------------");
+        monitor.info(LOG_SUBSEPARATOR);
         monitor.info("[SuperUserSeed] Building ParticipantManifest:");
         monitor.info("[SuperUserSeed]   Participant ID: %s".formatted(superUserParticipantId));
         monitor.info("[SuperUserSeed]   DID: %s".formatted(superUserDid));
@@ -190,7 +233,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
         monitor.info("[SuperUserSeed]   Key Curve: Ed25519");
         monitor.info("[SuperUserSeed]   Key ID: %s-key".formatted(superUserParticipantId));
         monitor.info("[SuperUserSeed]   Private Key Alias: %s-alias".formatted(superUserParticipantId));
-        monitor.info("[SuperUserSeed] ----------------------------------------");
+        monitor.info(LOG_SUBSEPARATOR);
         
         monitor.info("[SuperUserSeed] Calling ParticipantContextService.createParticipantContext()...");
         
@@ -210,7 +253,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
         if (result.succeeded()) {
             var generatedKey = result.getContent();
             monitor.info("[SuperUserSeed] ✓ ParticipantContext created successfully!");
-            monitor.info("[SuperUserSeed] ----------------------------------------");
+            monitor.info(LOG_SUBSEPARATOR);
             monitor.info("[SuperUserSeed] Generated credentials:");
             
             // Determine which API key to log (override or generated)
@@ -222,13 +265,6 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                             monitor.warning("[SuperUserSeed]   Expected: 'base64(<participantId>).<random-string>'");
                             monitor.warning("[SuperUserSeed]   This may cause authentication issues.");
                         }
-                        // TODO: Uncomment if you want to replace the auto-generated API key with the override
-                        // Store the override key in vault (replaces auto-generated key)
-                        // participantContextService.getParticipantContext(superUserParticipantId)
-                        //         .onSuccess(pc -> vault.storeSecret(pc.getApiTokenAlias(), key)
-                        //                 .onSuccess(u -> monitor.info("[SuperUserSeed] ✓ API key override stored in vault"))
-                        //                 .onFailure(f -> monitor.warning("[SuperUserSeed] ⚠ Error storing API key override: %s".formatted(f.getFailureDetail()))))
-                        //         .onFailure(f -> monitor.warning("[SuperUserSeed] ⚠ Error retrieving participant for API key override: %s".formatted(f.getFailureDetail())));
                         return true;
                     })
                     .orElseGet(() -> {
@@ -236,9 +272,9 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                         return generatedKey.apiKey();
                     });
             
-            monitor.info("[SuperUserSeed]   API Key: %s".formatted(apiKey));
+            //monitor.info("[SuperUserSeed]   API Key: %s".formatted(apiKey));
             monitor.info("[SuperUserSeed]   API Key Length: %d characters".formatted(apiKey.length()));
-            monitor.info("[SuperUserSeed] ----------------------------------------");
+            monitor.info(LOG_SUBSEPARATOR);
             
             monitor.info("[SuperUserSeed] EDC will automatically store vault secrets:");
             monitor.info("[SuperUserSeed]   1. %s-apikey → API authentication key".formatted(superUserParticipantId));
@@ -259,14 +295,27 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
     private boolean verifyVaultSecrets() {
         monitor.info("[SuperUserSeed] Verifying vault secrets for participant: %s".formatted(superUserParticipantId));
         
-        // First retrieve the participant context
+        var participantContext = retrieveParticipantContext();
+        if (participantContext == null) {
+            return false;
+        }
+        
+        int secretsFound = 0;
+        secretsFound += checkApiKeySecret(participantContext) ? 1 : 0;
+        secretsFound += checkPrivateKeySecret() ? 1 : 0;
+        secretsFound += checkStsSecret() ? 1 : 0;
+        
+        return logVerificationSummary(secretsFound);
+    }
+    
+    private org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantContext retrieveParticipantContext() {
         monitor.info("[SuperUserSeed] Retrieving ParticipantContext from service...");
         var result = participantContextService.getParticipantContext(superUserParticipantId);
         
         if (result.failed()) {
             monitor.warning("[SuperUserSeed] ⚠ Failed to retrieve participant context");
             monitor.warning("[SuperUserSeed] Error: %s".formatted(result.getFailureDetail()));
-            return false;
+            return null;
         }
         
         var pc = result.getContent();
@@ -274,72 +323,80 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
         monitor.info("[SuperUserSeed]   State: %s".formatted(pc.getState()));
         monitor.info("[SuperUserSeed]   DID: %s".formatted(pc.getDid()));
         monitor.info("[SuperUserSeed]   API Token Alias: %s".formatted(pc.getApiTokenAlias()));
-        
-        boolean allSecretsExist = true;
-        int secretsFound = 0;
-        int secretsMissing = 0;
-        
-        // Check API key
+        return pc;
+    }
+    
+    private boolean checkApiKeySecret(org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantContext pc) {
         var apiKeyAlias = pc.getApiTokenAlias();
         monitor.info("[SuperUserSeed] Checking vault secret 1/3: API Key");
-        monitor.info("[SuperUserSeed]   Alias: %s".formatted(apiKeyAlias));
+        monitor.info(LOG_ALIAS_FORMAT.formatted(apiKeyAlias));
         var apiKey = vault.resolveSecret(apiKeyAlias);
+        
         if (apiKey == null || apiKey.isEmpty()) {
-            monitor.warning("[SuperUserSeed]   ✗ NOT FOUND in vault");
-            allSecretsExist = false;
-            secretsMissing++;
-        } else {
-            monitor.info("[SuperUserSeed]   ✓ FOUND in vault");
-            monitor.info("[SuperUserSeed]   Value length: %d characters".formatted(apiKey.length()));
-            monitor.info("[SuperUserSeed]   Value preview: %s...".formatted(apiKey.substring(0, Math.min(20, apiKey.length()))));
-            secretsFound++;
+            monitor.warning(LOG_NOT_FOUND);
+            return false;
         }
         
-        // Check private key (alias)
+        monitor.info(LOG_FOUND);
+        monitor.info(LOG_VALUE_LENGTH.formatted(apiKey.length()));
+        monitor.info("[SuperUserSeed]   Value preview: %s...".formatted(apiKey.substring(0, Math.min(20, apiKey.length()))));
+        return true;
+    }
+    
+    private boolean checkPrivateKeySecret() {
         var privateKeyAlias = "%s-alias".formatted(superUserParticipantId);
         monitor.info("[SuperUserSeed] Checking vault secret 2/3: Private Key");
-        monitor.info("[SuperUserSeed]   Alias: %s".formatted(privateKeyAlias));
+        monitor.info(LOG_ALIAS_FORMAT.formatted(privateKeyAlias));
         var privateKey = vault.resolveSecret(privateKeyAlias);
+        
         if (privateKey == null || privateKey.isEmpty()) {
-            monitor.warning("[SuperUserSeed]   ✗ NOT FOUND in vault");
-            allSecretsExist = false;
-            secretsMissing++;
-        } else {
-            monitor.info("[SuperUserSeed]   ✓ FOUND in vault");
-            monitor.info("[SuperUserSeed]   Value length: %d characters".formatted(privateKey.length()));
-            // Check if it looks like a JWK
-            if (privateKey.contains("\"kty\"")) {
-                monitor.info("[SuperUserSeed]   Format: JWK (JSON Web Key)");
-                if (privateKey.contains("\"OKP\"") && privateKey.contains("\"Ed25519\"")) {
-                    monitor.info("[SuperUserSeed]   Key type: Ed25519 (correct)");
-                }
-            } else {
-                monitor.warning("[SuperUserSeed]   ⚠ Format: Unknown (expected JWK)");
-            }
-            secretsFound++;
+            monitor.warning(LOG_NOT_FOUND);
+            return false;
         }
         
-        // Check STS client secret
+        monitor.info(LOG_FOUND);
+        monitor.info(LOG_VALUE_LENGTH.formatted(privateKey.length()));
+        logPrivateKeyFormat(privateKey);
+        return true;
+    }
+    
+    private void logPrivateKeyFormat(String privateKey) {
+        if (privateKey.contains("\"kty\"")) {
+            monitor.info("[SuperUserSeed]   Format: JWK (JSON Web Key)");
+            if (privateKey.contains("\"OKP\"") && privateKey.contains("\"Ed25519\"")) {
+                monitor.info("[SuperUserSeed]   Key type: Ed25519 (correct)");
+            }
+        } else {
+            monitor.warning("[SuperUserSeed]   ⚠ Format: Unknown (expected JWK)");
+        }
+    }
+    
+    private boolean checkStsSecret() {
         var stsSecretAlias = "%s-sts-client-secret".formatted(superUserParticipantId);
         monitor.info("[SuperUserSeed] Checking vault secret 3/3: STS Client Secret");
-        monitor.info("[SuperUserSeed]   Alias: %s".formatted(stsSecretAlias));
+        monitor.info(LOG_ALIAS_FORMAT.formatted(stsSecretAlias));
         var stsSecret = vault.resolveSecret(stsSecretAlias);
+        
         if (stsSecret == null || stsSecret.isEmpty()) {
-            monitor.warning("[SuperUserSeed]   ✗ NOT FOUND in vault");
-            allSecretsExist = false;
-            secretsMissing++;
-        } else {
-            monitor.info("[SuperUserSeed]   ✓ FOUND in vault");
-            monitor.info("[SuperUserSeed]   Value length: %d characters".formatted(stsSecret.length()));
-            secretsFound++;
+            monitor.warning(LOG_NOT_FOUND);
+            return false;
         }
         
-        monitor.info("[SuperUserSeed] ----------------------------------------");
+        monitor.info(LOG_FOUND);
+        monitor.info(LOG_VALUE_LENGTH.formatted(stsSecret.length()));
+        return true;
+    }
+    
+    private boolean logVerificationSummary(int secretsFound) {
+        int secretsMissing = 3 - secretsFound;
+        boolean allSecretsExist = secretsFound == 3;
+        
+        monitor.info(LOG_SUBSEPARATOR);
         monitor.info("[SuperUserSeed] Vault verification summary:");
         monitor.info("[SuperUserSeed]   Secrets found: %d/3".formatted(secretsFound));
         monitor.info("[SuperUserSeed]   Secrets missing: %d/3".formatted(secretsMissing));
         monitor.info("[SuperUserSeed]   Overall status: %s".formatted(allSecretsExist ? "✓ SUCCESS" : "✗ INCOMPLETE"));
-        monitor.info("[SuperUserSeed] ----------------------------------------");
+        monitor.info(LOG_SUBSEPARATOR);
         
         return allSecretsExist;
     }
