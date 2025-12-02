@@ -213,7 +213,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
             var generatedKey = result.getContent();
             monitor.info(LOG_SUBSEPARATOR);            
             // Determine which API key to log (override or generated)
-            // TODO: Remove this section in production if you want to disable the ability to
+            // Remove this section in production if you want to disable the ability to
             // override the superUserApiKey. Commenting this will ensure that this value
             // cannot be modified through configuration.
             var apiKey = ofNullable(superUserApiKeyOverride)
@@ -231,9 +231,10 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                                 .onFailure(f -> monitor.warning("⚠ Error retrieving participant for API key override: %s".formatted(f.getFailureDetail())));
                         return true;
                     })
-                    .orElseGet(() -> {
-                        return generatedKey.apiKey();
-                    });            
+                    .orElseGet(() -> generatedKey.apiKey());
+            
+            // Log API key length for verification (actual key not logged for security)
+            monitor.debug("API key generated/configured with length: %d".formatted(apiKey.length()));
             return true;
         } else {
             monitor.warning("✗ Failed to create super-user: %s".formatted(result.getFailureDetail()));
@@ -272,8 +273,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
             return null;
         }
         
-        var pc = result.getContent();
-        return pc;
+        return result.getContent();
     }
     
     /**

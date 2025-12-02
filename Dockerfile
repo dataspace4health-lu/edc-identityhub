@@ -27,13 +27,12 @@ WORKDIR /app
 # Set default log level (can be overridden at runtime)
 ENV LOG_LEVEL=info
 
-# Install helper tools if needed
+# Install helper tools and create user
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl jq \
- && rm -rf /var/lib/apt/lists/*
-
-# Create a non-root user for runtime safety
-RUN groupadd -r appuser && useradd -r -g appuser -u 10001 appuser
+        curl jq \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -r appuser \
+    && useradd -r -g appuser -u 10001 appuser
 
 # Copy only the fat jar and configs from builder
 COPY --from=builder /workspace/build/libs/*.jar /app/identity-hub.jar
