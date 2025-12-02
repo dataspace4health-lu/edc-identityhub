@@ -231,7 +231,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                                 .onFailure(f -> monitor.warning("⚠ Error retrieving participant for API key override: %s".formatted(f.getFailureDetail())));
                         return true;
                     })
-                    .orElseGet(generatedKey::apiKey);
+                    .orElseGet(generatedKey.apiKey());
             
             // Log API key length for verification (actual key not logged for security)
             monitor.debug("API key generated/configured with length: %d".formatted(apiKey.length()));
