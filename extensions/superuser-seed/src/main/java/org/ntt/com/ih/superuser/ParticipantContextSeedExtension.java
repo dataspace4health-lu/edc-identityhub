@@ -234,7 +234,7 @@ public class ParticipantContextSeedExtension implements ServiceExtension {
                     .orElseGet(generatedKey::apiKey);
             
             // Log API key length for verification (actual key not logged for security)
-            // monitor.debug("API key generated/configured with length: %d".formatted(apiKey.length()));
+            monitor.debug("API key generated/configured with length: %d".formatted(apiKey.length()));
             return true;
         } else {
             monitor.warning("✗ Failed to create super-user: %s".formatted(result.getFailureDetail()));
