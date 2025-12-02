@@ -367,9 +367,9 @@ class ParticipantContextSeedExtensionTest {
 
     private ParticipantContext createMockParticipantContext() {
         return Builder.newInstance()
-                .participantId(SUPER_USER)
+                .participantContextId(SUPER_USER)
                 .did(SUPER_USER_DID)
-                                .apiTokenAlias(SUPERUSER_APIKEY_ALIAS)
+                .apiTokenAlias(SUPERUSER_APIKEY_ALIAS)
                 .build();
     }
 }
