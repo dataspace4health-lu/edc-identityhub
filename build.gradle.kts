@@ -78,9 +78,9 @@ sourceSets {
             // First, clear default srcDirs by removing them one by one
             setSrcDirs(emptySet<File>())
 
-            // Find all directories named 'src' under 'extensions/**/src'
+            // Find all directories named 'main' under 'extensions/**/src/main'
             val srcFolders = file("extensions").walkTopDown()
-                .filter { it.isDirectory && it.name == "src" }
+                .filter { it.isDirectory && it.name == "main" && it.parent.endsWith("src") }
                 .toSet()
 
             // Add those directories as source dirs
