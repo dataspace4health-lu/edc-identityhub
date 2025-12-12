@@ -37,6 +37,9 @@ dependencies {
 
     implementation(libs.edc.bom.identityhub)
     
+    // SQL persistence for PostgreSQL
+    runtimeOnly(libs.edc.bom.identityhub.sql)
+    
     implementation(libs.edc.boot)
     implementation(libs.edc.config.fs)
     implementation(libs.edc.ext.http)
@@ -52,11 +55,17 @@ dependencies {
     implementation(libs.edc.did.core)
 
     implementation(libs.edc.vault.hashicorp)
+    
+    // Superuser seed extension
+    runtimeOnly(project(":extensions:superuser-seed"))
     implementation(libs.edc.bom.identityhub.sql)
     
     testImplementation(libs.edc.spi.identity.did)
     testImplementation(libs.edc.lib.crypto)
     testImplementation(libs.edc.lib.keys)
+
+
+    
 }
 
 application {
@@ -69,9 +78,9 @@ sourceSets {
             // First, clear default srcDirs by removing them one by one
             setSrcDirs(emptySet<File>())
 
-            // Find all directories named 'src' under 'extensions/**/src'
+            // Find all directories named 'main' under 'extensions/**/src/main'
             val srcFolders = file("extensions").walkTopDown()
-                .filter { it.isDirectory && it.name == "src" }
+                .filter { it.isDirectory && it.name == "main" && it.parent.endsWith("src") }
                 .toSet()
 
             // Add those directories as source dirs
