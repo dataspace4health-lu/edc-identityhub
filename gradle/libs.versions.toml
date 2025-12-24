@@ -1,10 +1,11 @@
 [versions]
 edc = "0.14.0"
+edc-build = "1.1.2"
 shadow = "8.1.1"
+junit = "5.13.4"
+assertj = "3.27.0"
+mockito = "5.14.2"
 lombok = "1.18.32"
-junit = "5.10.1"
-mockito = "5.8.0"
-assertj = "3.24.2"
 
 [libraries]
 # upstream EDC dependencies
@@ -38,6 +39,13 @@ edc-lib-keys = { module = "org.eclipse.edc:keys-lib", version.ref = "edc" }
 # EDC SPI modules
 edc-spi-identity-did = { module = "org.eclipse.edc:identity-did-spi", version.ref = "edc" }
 
+# Test dependencies
+edc-junit = { module = "org.eclipse.edc:junit", version.ref = "edc" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
+junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine", version.ref = "junit" }
+assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
+
 # BOM modules
 edc-bom-identityhub = { module = "org.eclipse.edc:identityhub-bom", version.ref = "edc" }
 edc-bom-identityhub-sql = { module = "org.eclipse.edc:identityhub-feature-sql-bom", version.ref = "edc" }
@@ -58,3 +66,4 @@ assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 
 [plugins]
 shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadow" }
+edc-build = { id = "org.eclipse.edc.edc-build", version.ref = "edc-build" }

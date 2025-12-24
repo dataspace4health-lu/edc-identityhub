@@ -1,0 +1,46 @@
+# VCS
+.git
+.gitignore
+.jenkins
+
+# IDE/editor
+.vscode
+.idea
+
+# Gradle caches (keep gradle wrapper files)
+.gradle
+**/.gradle
+
+# Build outputs
+build
+**/build
+out
+bin
+dist
+target
+
+# Node/npm (if present in extensions)
+node_modules
+**/node_modules
+
+# OS/mac cruft
+.DS_Store
+Thumbs.db
+
+# Env and secrets
+.env
+*.env
+*.pem
+*.key
+*.jks
+*.p12
+**/*.pem
+**/*.key
+**/*.jks
+**/*.p12
+
+# Logs and temp
+*.log
+logs
+.tmp
+.tmp/**

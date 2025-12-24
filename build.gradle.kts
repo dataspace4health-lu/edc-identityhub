@@ -39,6 +39,9 @@ dependencies {
 
     implementation(libs.edc.bom.identityhub)
     
+    // SQL persistence for PostgreSQL
+    runtimeOnly(libs.edc.bom.identityhub.sql)
+    
     implementation(libs.edc.boot)
     implementation(libs.edc.config.fs)
     implementation(libs.edc.ext.http)
@@ -55,6 +58,8 @@ dependencies {
 
     implementation(libs.edc.vault.hashicorp)
     
+    // Superuser seed extension
+    runtimeOnly(project(":extensions:superuser-seed"))
     implementation(libs.edc.bom.identityhub.sql)
     implementation(libs.edc.ih.core.participant)
     implementation(libs.edc.bom.identityhub)
