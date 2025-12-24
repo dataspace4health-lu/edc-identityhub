@@ -40,12 +40,19 @@ pipeline {
             steps {
                 sh """
                     docker run --rm -v \$PWD:/workspace -w /workspace ${IMAGE_NAME} \
-                        chmod +x ./gradlew && ./gradlew test
+                        chmod +x ./gradlew && ./gradlew test jacocoTestReport
                 """
             }
             post {
                 always {
-                    junit testResults: 'build/test-results/**/*.xml', allowEmptyResults: true
+                    junit testResults: '**/build/reports/junit/xml/*.xml', allowEmptyResults: true
+                    publishHTML(
+                        target: [
+                            reportDir: 'build/reports/junit/html',
+                            reportFiles: 'index.html',
+                            reportName: 'Unit Test Report'
+                        ]
+                    )
                 }
             }
         }
@@ -60,8 +67,15 @@ pipeline {
                                 ${scannerHome}/bin/sonar-scanner -X \
                                     -Dsonar.projectKey=${DOCKER_IMAGE} \
                                     -Dsonar.sources=. \
-                                    -Dsonar.java.binaries=extensions/**/build/classes/java/main \
-                                    -Dsonar.java.libraries=build/libs,extensions/**/build/libs \
+                                    -Dsonar.inclusions=**/src/main/** \
+                                    -Dsonar.exclusions=**/build/**,**/bin/**,**/config/**,**/gradle/**,.jenkins/**,gradlew,gradlew.bat \
+                                    -Dsonar.tests=. \
+                                    -Dsonar.test.inclusions=**/src/test/** \
+                                    -Dsonar.java.binaries=**/build/classes \
+                                    -Dsonar.java.libraries=**/build/libs \
+                                    -Dsonar.java.test.binaries=**/build/classes/java/test \
+                                    -Dsonar.junit.reportPaths=**/build/reports/junit/xml \
+                                    -Dsonar.coverage.jacoco.xmlReportPaths=**/build/reports/jacoco/xml/jacoco.xml \
                                     -Dsonar.branch.name=${env.GIT_BRANCH.replaceFirst("^origin/", "")}
                             """
                         }
