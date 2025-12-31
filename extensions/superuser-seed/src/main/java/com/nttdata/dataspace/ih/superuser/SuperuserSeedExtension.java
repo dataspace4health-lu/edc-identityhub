@@ -113,8 +113,10 @@ public class SuperuserSeedExtension implements ServiceExtension {
                 return;
             }
             
-            if (!waitForRetry(attempt)) {
-                return;
+            // Only wait for retry if we haven't exhausted all attempts
+            // and if we should continue (not interrupted)
+            if (attempt < maxRetries && !waitForRetry(attempt)) {
+                return; // Interrupted, exit without error
             }
         }
         
@@ -164,18 +166,15 @@ public class SuperuserSeedExtension implements ServiceExtension {
     }
     
     private boolean waitForRetry(int attempt) {
-        if (attempt < maxRetries) {
-            monitor.info("Waiting %dms before retry...".formatted(retryDelayMs));
-            try {
-                Thread.sleep(retryDelayMs);
-                return true;
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                monitor.warning("⚠ Bootstrap interrupted");
-                return false;
-            }
+        monitor.info("Waiting %dms before retry %d...".formatted(retryDelayMs, attempt + 1));
+        try {
+            Thread.sleep(retryDelayMs);
+            return true;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            monitor.warning("⚠ Bootstrap interrupted");
+            return false;
         }
-        return false;
     }
     
     private void logBootstrapSuccess() {

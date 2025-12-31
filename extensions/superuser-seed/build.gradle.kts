@@ -10,6 +10,7 @@ dependencies {
     testImplementation(libs.junit.jupiter.api)
     testImplementation(libs.assertj.core)
     testImplementation(libs.mockito.core)
-    testImplementation("org.mockito:mockito-junit-jupiter:5.11.0")
+    testImplementation(libs.mockito.junit.jupiter)
     testRuntimeOnly(libs.junit.jupiter.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
 }

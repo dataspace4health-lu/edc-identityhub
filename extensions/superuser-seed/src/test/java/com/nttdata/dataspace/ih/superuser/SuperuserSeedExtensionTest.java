@@ -29,7 +29,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -41,9 +44,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class SuperuserSeedExtensionTest {
 
     private static final String TEST_SUPERUSER = "test-superuser";
@@ -69,19 +72,27 @@ class SuperuserSeedExtensionTest {
 
     @BeforeEach
     void setUp() {
-        // Configure monitor mock
-        when(context.getMonitor()).thenReturn(monitor);
-        when(monitor.withPrefix(anyString())).thenReturn(monitor);
+        // Configure monitor mock with lenient to avoid UnnecessaryStubbingException
+        lenient().when(context.getMonitor()).thenReturn(monitor);
+        lenient().when(monitor.withPrefix(anyString())).thenReturn(monitor);
         
-        // Default settings
-        when(context.getSetting(
+        // Default settings with lenient stubs
+        lenient().when(context.getSetting(
                 eq(SuperuserSeedExtension.SUPERUSER_PARTICIPANT_ID_PROPERTY), 
                 anyString()))
                 .thenReturn(TEST_SUPERUSER);
-        when(context.getSetting(
+        lenient().when(context.getSetting(
                 eq(SuperuserSeedExtension.SUPERUSER_DID_PROPERTY), 
                 anyString()))
                 .thenReturn("did:web:" + TEST_SUPERUSER);
+        lenient().when(context.getSetting(
+                eq(SuperuserSeedExtension.MAX_RETRIES_PROPERTY), 
+                anyString()))
+                .thenReturn("5");
+        lenient().when(context.getSetting(
+                eq(SuperuserSeedExtension.RETRY_DELAY_MS_PROPERTY), 
+                anyString()))
+                .thenReturn("2000");
     }
 
     @Test
@@ -218,11 +229,15 @@ class SuperuserSeedExtensionTest {
         extension.initialize(context);
         
         // Superuser does not exist and creation always fails
+        // Return notFound consistently for all retry attempts
         when(participantContextService.getParticipantContext(TEST_SUPERUSER))
                 .thenReturn(ServiceResult.notFound(NOT_FOUND));
         
         when(participantContextService.createParticipantContext(any()))
                 .thenReturn(ServiceResult.badRequest("Creation failed"));
+        
+        // No vault secrets
+        when(vault.resolveSecret(anyString())).thenReturn(null);
 
         // When & Then
         assertThatThrownBy(() -> extension.start())
@@ -239,16 +254,17 @@ class SuperuserSeedExtensionTest {
         
         var participantContext = createMockParticipantContext(TEST_SUPERUSER);
         
-        // Superuser does not exist
+        // Superuser does not exist initially, but created successfully
+        // After creation, getParticipantContext succeeds but vault secrets never appear
         when(participantContextService.getParticipantContext(TEST_SUPERUSER))
-                .thenReturn(ServiceResult.notFound(NOT_FOUND))
-                .thenReturn(ServiceResult.success(participantContext));
+                .thenReturn(ServiceResult.notFound(NOT_FOUND))  // First check - doesn't exist
+                .thenReturn(ServiceResult.success(participantContext)); // After creation - exists
         
         // Creation succeeds
         when(participantContextService.createParticipantContext(any()))
                 .thenReturn(ServiceResult.success(createMockCreateParticipantContextResponse()));
         
-        // Vault secrets never appear
+        // Vault secrets never appear (always null)
         when(vault.resolveSecret(anyString())).thenReturn(null);
 
         // When & Then
@@ -323,8 +339,8 @@ class SuperuserSeedExtensionTest {
         // When
         extension.start();
 
-        // Then
-        verify(participantContextService).getParticipantContext(CUSTOM_ADMIN_ID);
+        // Then - getParticipantContext is called twice: once in tryBootstrap() and once in retrieveParticipantContext()
+        verify(participantContextService, times(2)).getParticipantContext(CUSTOM_ADMIN_ID);
         verify(vault).resolveSecret(CUSTOM_ADMIN_ID + APIKEY_SUFFIX);
         verify(vault).resolveSecret(CUSTOM_ADMIN_ID + "-alias");
         verify(vault).resolveSecret(CUSTOM_ADMIN_ID + "-sts-client-secret");
