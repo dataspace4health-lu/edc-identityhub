@@ -4,11 +4,12 @@ pipeline {
     environment {
         DOCKER_IMAGE = "${env.JOB_NAME.tokenize('/').dropRight(1).takeRight(1).join('-').toLowerCase()}"
         DOCKER_TAG = "${env.BUILD_NUMBER}"
+        REGISTRY = "ds4h-registry:5432"
         IMAGE_NAME = "${DOCKER_IMAGE}:${DOCKER_TAG}"
     }
 
     parameters {
-        choice(name: 'PUBLISH_IMAGE', choices: ['', 'ds4h-registry:5432', 'ds4hacrshared.azurecr.io'], description: 'Publish Docker image after build to this repo')
+        booleanParam(name: 'PUBLISH', defaultValue: false, description: 'Set to true to publish artifacts')
     }
 
     stages {
@@ -122,7 +123,7 @@ pipeline {
 
         stage('Publish Docker Image') {
             when {
-                expression { return params.PUBLISH_IMAGE != '' }
+                expression { env.BRANCH_NAME.startsWith('refs/tags/') || params.PUBLISH }
             }
             steps {
                 script {
@@ -154,13 +155,13 @@ pipeline {
                     tag = tag.replaceFirst(/^v/, "") // Trim leading v
                     
                     sh """
-                        echo "Tagging image ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
-                        docker tag ${IMAGE_NAME} ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
-                        echo "Pushing image ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}."
-                        docker push ${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}
+                        echo "Tagging image ${IMAGE_NAME} ${env.REGISTRY}/${DOCKER_IMAGE}:${tag}."
+                        docker tag ${IMAGE_NAME} ${env.REGISTRY}/${DOCKER_IMAGE}:${tag}
+                        echo "Pushing image ${env.REGISTRY}/${DOCKER_IMAGE}:${tag}."
+                        docker push ${env.REGISTRY}/${DOCKER_IMAGE}:${tag}
                     """
                     // Save it in the build description
-                    currentBuild.description = "BuiltImage=${params.PUBLISH_IMAGE}/${DOCKER_IMAGE}:${tag}"
+                    currentBuild.description = "BuiltImage=${env.REGISTRY}/${DOCKER_IMAGE}:${tag}"
                 }
             }
         }
