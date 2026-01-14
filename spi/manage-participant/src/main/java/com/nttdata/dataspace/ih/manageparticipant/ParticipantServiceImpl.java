@@ -46,7 +46,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator) {
 
-        String participantId = participantData.getParticipantId();
+        String participantId = participantData.getParticipantContextId();
 
         if (participantContextService.getParticipantContext(participantId).succeeded()) { // already exists
             monitor.info("Participant already exists with ID '%s', will not re-create".formatted(participantId));

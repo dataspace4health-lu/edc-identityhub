@@ -197,7 +197,7 @@ public class SuperuserSeedExtension implements ServiceExtension {
     private boolean createSuperUser() {
         var result = participantContextService.createParticipantContext(
                 ParticipantManifest.Builder.newInstance()
-                        .participantId(superUserParticipantId)
+                        .participantContextId(superUserParticipantId)
                         .did(superUserDid)
                         .active(true)
                         .key(KeyDescriptor.Builder.newInstance()
