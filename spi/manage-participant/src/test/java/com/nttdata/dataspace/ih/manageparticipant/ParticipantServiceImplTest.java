@@ -54,7 +54,7 @@ class ParticipantServiceImplTest {
         participantService = new ParticipantServiceImpl();
         
         testManifest = ParticipantManifest.Builder.newInstance()
-                .participantId(participantId)
+                .participantContextId(participantId)
                 .did("did:web:" + participantId)
                 .active(true)
                 .key(KeyDescriptor.Builder.newInstance()
