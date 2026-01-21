@@ -65,7 +65,7 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
             monitor.info("Seeding initial participant with ID: " + participantId);
 
             ParticipantManifest participantManifest = ParticipantManifest.Builder.newInstance()
-                        .participantId(participantId)
+                        .participantContextId(participantId)
                         .did(ParticipantConstants.PARTICIPANT_DID_FORMAT_STRING.formatted(participantId))
                         .active(true)
                         .key(KeyDescriptor.Builder.newInstance()

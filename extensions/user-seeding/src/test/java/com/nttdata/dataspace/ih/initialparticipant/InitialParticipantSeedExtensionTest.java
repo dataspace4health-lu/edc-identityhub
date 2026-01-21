@@ -129,7 +129,7 @@ class InitialParticipantSeedExtensionTest {
         
         var capturedManifests = participantCaptor.getAllValues();
         assertThat(capturedManifests).hasSize(2);
-        assertThat(capturedManifests).extracting(ParticipantManifest::getParticipantId)
+        assertThat(capturedManifests).extracting(ParticipantManifest::getParticipantContextId)
                 .contains(PARTICIPANT1, PARTICIPANT2);
     }
 

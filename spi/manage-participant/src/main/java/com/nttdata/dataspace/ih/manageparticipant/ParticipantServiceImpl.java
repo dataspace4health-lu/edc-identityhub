@@ -28,7 +28,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor,  EdcHttpClient httpClient) {
         /**
-         * TODO: implement the logic to call rest end point provided by Identity hub . The api does the validation but does it check if the participant already exist?
+         * Implement the logic to call rest end point provided by Identity hub . The api does the validation but does it check if the participant already exist?
          * ParticipantContants.CREATE_PARTICIPANT_EP 
          * in this approach we need the superuser api key 
          * 1. to be fetched and sent in the request if we want to create the participant interanlly
@@ -46,7 +46,7 @@ public class ParticipantServiceImpl implements ParticipantService {
     @Override
     public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator) {
 
-        String participantId = participantData.getParticipantId();
+        String participantId = participantData.getParticipantContextId();
 
         if (participantContextService.getParticipantContext(participantId).succeeded()) { // already exists
             monitor.info("Participant already exists with ID '%s', will not re-create".formatted(participantId));

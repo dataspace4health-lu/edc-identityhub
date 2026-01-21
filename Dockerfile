@@ -33,9 +33,19 @@ ENV LOG_LEVEL=info
 ARG APP_USER=appuser  
 ARG APP_UID=10100
 
-# Install helper tools and create user
+# Install helper tools, upgrade GnuPG packages for CVE-2025-68973, and create user
 RUN apt-get update && apt-get install -y --no-install-recommends \
         curl jq \
+    && apt-get upgrade -y \
+        dirmngr \
+        gnupg \
+        gnupg-utils \
+        gpg \
+        gpg-agent \
+        gpgconf \
+        gpgsm \
+        gpgv \
+        keyboxd \
     && rm -rf /var/lib/apt/lists/* \
     && addgroup --system "$APP_USER" \
     && adduser \  
