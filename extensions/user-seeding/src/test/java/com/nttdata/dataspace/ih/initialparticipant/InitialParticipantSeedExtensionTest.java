@@ -3,6 +3,7 @@ package com.nttdata.dataspace.ih.initialparticipant;
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantConstants;
 import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextService;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantManifest;
+import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.ServiceResult;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
@@ -41,6 +42,9 @@ class InitialParticipantSeedExtensionTest {
     private ParticipantContextService participantContextService;
 
     @Mock
+    private ParticipantContextConfigService participantContextConfigService;
+
+    @Mock
     private Config config;
 
     private InitialParticipantSeedExtension extension;
@@ -60,7 +64,12 @@ class InitialParticipantSeedExtensionTest {
                 .thenReturn(KEY_ALGO);
         lenient().when(config.getString(ParticipantConstants.SIGN_PC_CURVE_KEY, ParticipantConstants.SIGN_SCHEME_ED25519))
                 .thenReturn(KEY_CURVE);
+        lenient().when(config.getString(ParticipantConstants.CREDENTIAL_SERVICE_URL_KEY, null)).thenReturn(null);
+        lenient().when(config.getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null)).thenReturn(null);
+        lenient().when(config.getString(ParticipantConstants.CREDENTIALS_API_PATH_KEY, null)).thenReturn("/api/v1/credentials");
+        lenient().when(config.getString(ParticipantConstants.PROTOCOL_API_PATH_KEY, null)).thenReturn("/api/v1/protocol");
         lenient().when(context.getService(ParticipantContextService.class)).thenReturn(participantContextService);
+        lenient().when(context.getService(ParticipantContextConfigService.class)).thenReturn(participantContextConfigService);
     }
 
     @Test
@@ -71,7 +80,7 @@ class InitialParticipantSeedExtensionTest {
         // Assert
         verify(context).getMonitor();
         verify(monitor).withPrefix("InitialParticipantsSeed");
-        verify(monitor).debug("Initial Participants Seed Extension initialized.");
+        verify(monitor).info("Initial Participants Seed Extension initialized.");
         verify(config).getString(ParticipantConstants.PARTICIPANT_ID_KEY);
         verify(config).getString(ParticipantConstants.SIGN_PC_ALGO_KEY, ParticipantConstants.SIGN_SCHEME_EDDSA);
         verify(config).getString(ParticipantConstants.SIGN_PC_CURVE_KEY, ParticipantConstants.SIGN_SCHEME_ED25519);
@@ -83,6 +92,7 @@ class InitialParticipantSeedExtensionTest {
         when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
         when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
                 .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
         
         extension.initialize(context);
 
@@ -91,6 +101,7 @@ class InitialParticipantSeedExtensionTest {
 
         // Assert
         verify(participantContextService, times(2)).createParticipantContext(any(ParticipantManifest.class));
+        verify(participantContextConfigService, times(2)).save(any());
     }
 
     @Test
@@ -100,6 +111,7 @@ class InitialParticipantSeedExtensionTest {
         when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
         when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
                 .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
 
         extension.initialize(context);
 
@@ -108,6 +120,7 @@ class InitialParticipantSeedExtensionTest {
 
         // Assert - should create only 2 participants (skip empty string)
         verify(participantContextService, times(2)).createParticipantContext(any(ParticipantManifest.class));
+        verify(participantContextConfigService, times(2)).save(any());
     }
 
     @Test
@@ -117,6 +130,7 @@ class InitialParticipantSeedExtensionTest {
         when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
         when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
                 .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
         
         extension.initialize(context);
 
@@ -126,6 +140,7 @@ class InitialParticipantSeedExtensionTest {
         // Assert - verify participants are trimmed correctly
         ArgumentCaptor<ParticipantManifest> participantCaptor = ArgumentCaptor.forClass(ParticipantManifest.class);
         verify(participantContextService, times(2)).createParticipantContext(participantCaptor.capture());
+        verify(participantContextConfigService, times(2)).save(any());
         
         var capturedManifests = participantCaptor.getAllValues();
         assertThat(capturedManifests).hasSize(2);
@@ -141,6 +156,7 @@ class InitialParticipantSeedExtensionTest {
         // Assert - verify initialization completes successfully
         verify(context).getMonitor();
         verify(monitor).withPrefix("InitialParticipantsSeed");
+        verify(monitor).info("Initial Participants Seed Extension initialized.");
     }
 
     @Test

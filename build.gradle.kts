@@ -41,6 +41,8 @@ dependencies {
     
     // SQL persistence for PostgreSQL
     runtimeOnly(libs.edc.bom.identityhub.sql)
+    implementation(libs.edc.pc.config.store)
+    implementation(libs.edc.pc.core)
     
     implementation(libs.edc.boot)
     implementation(libs.edc.config.fs)
@@ -79,6 +81,8 @@ dependencies {
     implementation(project(":spi:manage-participant"))
     
     implementation(project(":services"))
+
+    implementation(project(":extensions:common:http:client"))
 
     testReportAggregation(project(":extensions:user-seeding"))
     testReportAggregation(project(":extensions:service-loader"))

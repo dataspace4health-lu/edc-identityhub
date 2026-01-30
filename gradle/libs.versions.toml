@@ -29,6 +29,8 @@ edc-ih-core-participant = { module = "org.eclipse.edc:identity-hub-participants"
 # identityhub API modules
 edc-ih-api-did = { module = "org.eclipse.edc:did-api", version.ref = "edc" }
 edc-ih-api-participants = { module = "org.eclipse.edc:participant-context-api", version.ref = "edc" }
+edc-pc-core = { module = "org.eclipse.edc:participant-context-config-core", version.ref = "edc" }
+edc-pc-config-store = { module = "org.eclipse.edc:participantcontext-config-store-sql", version.ref = "edc" }
 
 #validators
 edc-ih-participant-validator = { module = "org.eclipse.edc:participant-context-validators", version.ref = "edc" }

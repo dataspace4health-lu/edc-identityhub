@@ -7,6 +7,7 @@ import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextServ
 import org.eclipse.edc.identityhub.spi.participantcontext.model.CreateParticipantContextResponse;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.KeyDescriptor;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantManifest;
+import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
 import org.eclipse.edc.spi.EdcException;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.ServiceResult;
@@ -26,6 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +45,9 @@ class ParticipantServiceImplTest {
 
     @Mock
     private ParticipantManifestValidator validator;
+
+    @Mock
+    private ParticipantContextConfigService participantContextConfigService;
 
     private ParticipantService participantService;
     private ParticipantManifest testManifest;
@@ -85,10 +90,12 @@ class ParticipantServiceImplTest {
         when(validator.validate(testManifest)).thenReturn(ValidationResult.success());
         when(participantContextService.createParticipantContext(testManifest))
                 .thenReturn(ServiceResult.success(expectedResponse));
+        when(participantContextConfigService.save(any()))
+                .thenReturn(ServiceResult.success());
 
         // Act
         ServiceResult<CreateParticipantContextResponse> result = 
-            participantService.createParticipant(testManifest, participantContextService, monitor, validator);
+            participantService.createParticipant(testManifest, participantContextService, monitor, validator, participantContextConfigService);
 
         // Assert
         assertThat(result.succeeded()).isTrue();
@@ -96,7 +103,8 @@ class ParticipantServiceImplTest {
         verify(participantContextService).getParticipantContext(participantId);
         verify(validator).validate(testManifest);
         verify(participantContextService).createParticipantContext(testManifest);
-        verify(monitor).info(anyString());
+        verify(participantContextConfigService).save(any());
+        verify(monitor, times(2)).info(anyString()); // Called twice: once for participant creation, once for config save
     }
 
     @Test
@@ -107,7 +115,7 @@ class ParticipantServiceImplTest {
 
         // Act
         ServiceResult<CreateParticipantContextResponse> result = 
-            participantService.createParticipant(testManifest, participantContextService, monitor, validator);
+            participantService.createParticipant(testManifest, participantContextService, monitor, validator, participantContextConfigService);
 
         // Assert
         assertThat(result.failed()).isTrue();
@@ -129,7 +137,7 @@ class ParticipantServiceImplTest {
 
         // Act
         ServiceResult<CreateParticipantContextResponse> result = 
-            participantService.createParticipant(testManifest, participantContextService, monitor, validator);
+            participantService.createParticipant(testManifest, participantContextService, monitor, validator, participantContextConfigService);
 
         // Assert
         assertThat(result.failed()).isTrue();
@@ -150,7 +158,7 @@ class ParticipantServiceImplTest {
 
         // Act & Assert
         assertThatThrownBy(() -> 
-            participantService.createParticipant(testManifest, participantContextService, monitor, validator))
+            participantService.createParticipant(testManifest, participantContextService, monitor, validator, participantContextConfigService))
                 .isInstanceOf(EdcException.class)
                 .hasMessageContaining("Error creating participant " + participantId);
 

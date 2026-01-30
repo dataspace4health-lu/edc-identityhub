@@ -6,6 +6,7 @@ import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.ServiceResult;
 import org.eclipse.edc.identityhub.api.verifiablecredential.validation.ParticipantManifestValidator;
 import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextService;
+import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
 import org.eclipse.edc.http.spi.EdcHttpClient;
 
 public interface ParticipantService {
@@ -25,6 +26,6 @@ public interface ParticipantService {
      * @param monitor the injected variable from EDC
      * @return
      */
-    public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator);
+    public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator, ParticipantContextConfigService participantContextConfigService);
 
 }

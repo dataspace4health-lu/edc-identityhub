@@ -10,6 +10,7 @@ dependencies {
     implementation(libs.edc.bom.identityhub.sql)
     implementation(libs.edc.ih.participant.validator)
     implementation(libs.edc.http.client)
+    implementation(libs.edc.pc.core)
 
     implementation(project(":services"))
     implementation(project(":spi"))

@@ -6,6 +6,8 @@ import org.eclipse.edc.identityhub.api.verifiablecredential.validation.Participa
 import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextService;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.CreateParticipantContextResponse;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantManifest;
+import org.eclipse.edc.participantcontext.spi.config.model.ParticipantContextConfiguration;
+import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
 import org.eclipse.edc.spi.EdcException;
 import org.eclipse.edc.spi.monitor.Monitor;
 import org.eclipse.edc.spi.result.ServiceResult;
@@ -44,7 +46,7 @@ public class ParticipantServiceImpl implements ParticipantService {
      * @param monitor the injected variable from EDC
      */
     @Override
-    public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator) {
+    public ServiceResult<CreateParticipantContextResponse> createParticipant(ParticipantManifest participantData, ParticipantContextService participantContextService, Monitor monitor, ParticipantManifestValidator validator, ParticipantContextConfigService participantContextConfigService) {
 
         String participantId = participantData.getParticipantContextId();
 
@@ -55,11 +57,25 @@ public class ParticipantServiceImpl implements ParticipantService {
 
         if(validator.validate(participantData).succeeded()){
 
-          CreateParticipantContextResponse participantContextResponse = participantContextService.createParticipantContext(participantData).onSuccess( response -> 
+            CreateParticipantContextResponse participantContextResponse = participantContextService.createParticipantContext(participantData).onSuccess( response -> 
                     monitor.info(String.format("Participant created successfully: %s", participantId))
                 )
                 .orElseThrow(f -> new EdcException(String.format("Error creating participant %s : %s", participantId, f.getFailureDetail())));
 
+            // Save the ParticipantContextConfiguration for this participant
+            // This is required for the system to properly handle this participant context
+            monitor.debug(String.format("Creating ParticipantContextConfiguration for : %s", participantId));
+            var participantContextConfig = ParticipantContextConfiguration.Builder.newInstance()
+                    .participantContextId(participantId)
+                    .build();
+            
+            var saveResult = participantContextConfigService.save(participantContextConfig);
+            if (saveResult.failed()) {
+                throw new EdcException(String.format("Error creating ParticipantContextConfiguration %s : %s", participantId, saveResult.getFailureDetail()));
+            } else {
+                monitor.info("Successfully saved ParticipantContextConfiguration for participant: " + participantId);
+            }
+            
         return ServiceResult.success(participantContextResponse);
         }
         
