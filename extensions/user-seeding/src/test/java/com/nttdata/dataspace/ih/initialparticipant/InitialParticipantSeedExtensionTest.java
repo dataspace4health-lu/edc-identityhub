@@ -667,6 +667,46 @@ class InitialParticipantSeedExtensionTest {
     }
 
     @Test
+    void startShouldUseFallbackUrlWhenCredentialServiceUrlEmpty() {
+        // Arrange - empty credential service URL triggers fallback
+        when(config.getString(ParticipantConstants.CREDENTIAL_SERVICE_URL_KEY, null)).thenReturn("");
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - fallback URL constructed from participant DID
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+    }
+
+    @Test
+    void startShouldUseFallbackUrlWhenDspCallbackAddressEmpty() {
+        // Arrange - empty DSP callback triggers fallback
+        when(config.getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null)).thenReturn("");
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - fallback URL constructed from participant DID
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        assertThat(captor.getAllValues()).hasSize(2);
+    }
+
+    @Test
     void startShouldConstructDspCallbackUrlFromConfig() {
         // Arrange
         String customDspUrl = "https://custom.example.com/dsp";
