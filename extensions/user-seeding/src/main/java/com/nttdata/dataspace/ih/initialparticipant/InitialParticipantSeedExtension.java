@@ -26,9 +26,6 @@ import java.util.List;
 import java.util.Map;
 
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantServiceImpl;
-
-import okhttp3.MultipartBody.Part;
-
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantConstants;
 
 
@@ -264,12 +261,23 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         
         var didResource = didResourceList.iterator().next();
         var didDocument = didResource.getDocument();
-        var keyId = participantId + "#key";
         
-        monitor.info("Found DID document: " + didDocument.getId() + " with " + didDocument.getVerificationMethod().size() + " verification methods");
+        // Extract keyId dynamically from existing verification methods or use the standard format
+        String keyId;
+        var verificationMethods = didDocument.getVerificationMethod();
+        if (!verificationMethods.isEmpty()) {
+            // Use the existing verification method's keyId
+            keyId = verificationMethods.get(0).getId();
+            monitor.info("Using existing verification method keyId: " + keyId);
+        } else {
+            // Fallback to standard format (same as used during participant creation)
+            keyId = ParticipantConstants.PARTICIPANT_PUBLIC_KEY_ALIAS_FORMAT.formatted(participantId);
+            monitor.info("No existing verification methods found, using standard keyId format: " + keyId);
+        }
+        
+        monitor.info("Found DID document: " + didDocument.getId() + " with " + verificationMethods.size() + " verification methods");
         
         // Update the verification method with the new public key
-        var verificationMethods = didDocument.getVerificationMethod();
         var oldMethodCount = verificationMethods.size();
         verificationMethods.removeIf(vm -> vm.getId().equals(keyId));
         monitor.info("Removed " + (oldMethodCount - verificationMethods.size()) + " old verification method(s) with keyId: " + keyId);

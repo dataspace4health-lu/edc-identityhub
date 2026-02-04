@@ -168,11 +168,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateMultipleParticipants() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -187,11 +183,7 @@ class InitialParticipantSeedExtensionTest {
     void startShouldSkipEmptyParticipantIds() {
         // Arrange
         when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn("participant1, ,participant2");
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -206,11 +198,7 @@ class InitialParticipantSeedExtensionTest {
     void startShouldTrimParticipantIds() {
         // Arrange
         when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(" participant1 , participant2 ");
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -259,11 +247,7 @@ class InitialParticipantSeedExtensionTest {
     void startShouldNotOverrideKeysWhenDisabled() {
         // Arrange
         when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(false);
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -281,37 +265,10 @@ class InitialParticipantSeedExtensionTest {
         String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-public-x\",\"d\":\"test-private-d\",\"kid\":\"test-key-id\"}";
         when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
         when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
-        // Mock DID document operations
-        var didDocument = DidDocument.Builder.newInstance()
-                .id(PARTICIPANT1)
-                .verificationMethod(new ArrayList<>())
-                .authentication(new ArrayList<>())
-                .build();
-        var didResource = DidResource.Builder.newInstance()
-                .did(PARTICIPANT1)
-                .document(didDocument)
-                .build();
-        when(didResourceStore.query(any(QuerySpec.class))).thenReturn(List.of(didResource));
-        when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.success());
+        setupBasicParticipantMocks();
+        setupDidDocumentMock(PARTICIPANT1);
         when(didDocumentService.publish(anyString())).thenReturn(ServiceResult.success());
-        
-        // Mock database operations
-        when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
-        doAnswer(invocation -> {
-            Object arg = invocation.getArgument(0);
-            if (arg != null) {
-                ((TransactionBlock) arg).execute();
-            }
-            return null;
-        }).when(transactionContext).execute(any(TransactionBlock.class));
-        
+        setupDatabaseMocks();
         extension.initialize(context);
 
         // Act
@@ -512,17 +469,13 @@ class InitialParticipantSeedExtensionTest {
         // Arrange
         when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
         when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(null);
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
         extension.start();
 
-        // Assert - no operations performed
+        // Assert - no key override operations performed
         verify(vault, never()).storeSecret(anyString(), anyString(), anyString());
         verify(didResourceStore, never()).query(any(QuerySpec.class));
     }
@@ -532,17 +485,13 @@ class InitialParticipantSeedExtensionTest {
         // Arrange
         when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
         when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn("");
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
         extension.start();
 
-        // Assert - no operations performed
+        // Assert - no key override operations performed
         verify(vault, never()).storeSecret(anyString(), anyString(), anyString());
     }
 
@@ -746,11 +695,7 @@ class InitialParticipantSeedExtensionTest {
         // Arrange
         String customDspUrl = "https://custom.example.com/dsp";
         when(config.getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null)).thenReturn(customDspUrl);
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -763,11 +708,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateParticipantManifestWithCorrectKeyDescriptor() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -788,11 +729,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateActiveParticipants() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -809,11 +746,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateParticipantsWithCorrectDids() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -848,11 +781,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateServiceEndpointsForEachParticipant() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -874,11 +803,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldLogInfoForEachParticipantSeeded() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -903,11 +828,7 @@ class InitialParticipantSeedExtensionTest {
     @Test
     void startShouldCreateParticipantsWithEmptyRolesList() {
         // Arrange
-        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
-        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
-                .thenReturn(ServiceResult.success(null));
-        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
-        
+        setupBasicParticipantMocks();
         extension.initialize(context);
 
         // Act
@@ -1052,6 +973,40 @@ class InitialParticipantSeedExtensionTest {
         // Assert - only PARTICIPANT2 should be created
         verify(participantContextService, times(1)).createParticipantContext(any(ParticipantManifest.class));
         verify(monitor).info("Participant already exists with ID '" + PARTICIPANT1 + "', will not re-create");
+    }
+
+    // Helper methods to reduce boilerplate
+    private void setupBasicParticipantMocks() {
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+    }
+
+    private DidResource setupDidDocumentMock(String participantId) {
+        var didDocument = DidDocument.Builder.newInstance()
+                .id(participantId)
+                .verificationMethod(new ArrayList<>())
+                .authentication(new ArrayList<>())
+                .build();
+        var didResource = DidResource.Builder.newInstance()
+                .did(participantId)
+                .document(didDocument)
+                .build();
+        when(didResourceStore.query(any(QuerySpec.class))).thenReturn(List.of(didResource));
+        when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.success());
+        return didResource;
+    }
+
+    private void setupDatabaseMocks() throws Exception {
+        lenient().when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
+        lenient().when(dataSource.getConnection()).thenReturn(connection);
+        lenient().when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
+        lenient().doAnswer(invocation -> {
+            TransactionBlock block = invocation.getArgument(0);
+            block.execute();
+            return null;
+        }).when(transactionContext).execute(any(TransactionBlock.class));
     }
 
 }
