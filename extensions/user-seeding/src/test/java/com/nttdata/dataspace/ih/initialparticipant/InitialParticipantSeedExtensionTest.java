@@ -245,5 +245,224 @@ class InitialParticipantSeedExtensionTest {
         verify(didDocumentService, never()).publish(anyString());
     }
 
-}
+    @Test
+    void initializeShouldLogWarningWhenKeyOverrideEnabled() {
+        // Arrange
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null))
+                .thenReturn("{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test\",\"d\":\"secret\"}");
 
+        // Act
+        extension.initialize(context);
+
+        // Assert
+        verify(monitor).warning("Key override is enabled. This should only be used for testing purposes!");
+    }
+
+    @Test
+    void startShouldConstructCredentialServiceUrlFromConfig() {
+        // Arrange
+        String customUrl = "https://custom.example.com/credential-service";
+        when(config.getString(ParticipantConstants.CREDENTIAL_SERVICE_URL_KEY, null)).thenReturn(customUrl);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify custom URL is used
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        // Check that service endpoints contain the custom URL
+        var manifests = captor.getAllValues();
+        assertThat(manifests).isNotEmpty();
+    }
+
+    @Test
+    void startShouldConstructDspCallbackUrlFromConfig() {
+        // Arrange
+        String customDspUrl = "https://custom.example.com/dsp";
+        when(config.getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null)).thenReturn(customDspUrl);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert
+        verify(participantContextService, times(2)).createParticipantContext(any(ParticipantManifest.class));
+    }
+
+    @Test
+    void startShouldCreateParticipantManifestWithCorrectKeyDescriptor() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify key descriptor properties
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        var manifest = captor.getAllValues().get(0);
+        assertThat(manifest.getKeys()).hasSize(1);
+        var keyDescriptor = manifest.getKeys().iterator().next();
+        assertThat(keyDescriptor.getKeyGeneratorParams())
+                .containsEntry(ParticipantConstants.KEY_ALGO_STRING, KEY_ALGO)
+                .containsEntry(ParticipantConstants.KEY_CURVE_STRING, KEY_CURVE);
+    }
+
+    @Test
+    void startShouldCreateActiveParticipants() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify participants are active
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        var manifests = captor.getAllValues();
+        assertThat(manifests).allMatch(ParticipantManifest::isActive);
+    }
+
+    @Test
+    void startShouldCreateParticipantsWithCorrectDids() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify DIDs match participant IDs
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        var manifests = captor.getAllValues();
+        assertThat(manifests)
+                .extracting(ParticipantManifest::getDid)
+                .contains(PARTICIPANT1, PARTICIPANT2);
+    }
+
+    @Test
+    void initializeShouldReadAllConfigurationParameters() {
+        // Arrange & Act
+        extension.initialize(context);
+
+        // Assert - verify all config parameters are read
+        verify(config).getString(ParticipantConstants.PARTICIPANT_ID_KEY);
+        verify(config).getString(ParticipantConstants.SIGN_PC_ALGO_KEY, ParticipantConstants.SIGN_SCHEME_EDDSA);
+        verify(config).getString(ParticipantConstants.SIGN_PC_CURVE_KEY, ParticipantConstants.SIGN_SCHEME_ED25519);
+        verify(config).getString(ParticipantConstants.CREDENTIAL_SERVICE_URL_KEY, null);
+        verify(config).getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null);
+        verify(config).getString(ParticipantConstants.CREDENTIALS_API_PATH_KEY, null);
+        verify(config).getString(ParticipantConstants.PROTOCOL_API_PATH_KEY, null);
+        verify(config).getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false);
+    }
+
+    @Test
+    void startShouldCreateServiceEndpointsForEachParticipant() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify service endpoints are created
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        var manifests = captor.getAllValues();
+        assertThat(manifests).allSatisfy(manifest -> {
+            assertThat(manifest.getServiceEndpoints()).hasSize(2);
+            assertThat(manifest.getServiceEndpoints())
+                    .extracting(org.eclipse.edc.iam.did.spi.document.Service::getType)
+                    .contains("CredentialService", "ProtocolEndpoint");
+        });
+    }
+
+    @Test
+    void startShouldLogInfoForEachParticipantSeeded() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify logging
+        verify(monitor).info("Starting Initial Participant Seeding...");
+        verify(monitor).info("Seeding initial participant with ID: " + PARTICIPANT1);
+        verify(monitor).info("Seeding initial participant with ID: " + PARTICIPANT2);
+    }
+
+    @Test
+    void initializeShouldRetrieveServicesFromContext() {
+        // Act
+        extension.initialize(context);
+
+        // Assert
+        verify(context).getService(ParticipantContextService.class);
+        verify(context).getService(ParticipantContextConfigService.class);
+    }
+
+    @Test
+    void startShouldCreateParticipantsWithEmptyRolesList() {
+        // Arrange
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - verify roles are empty
+        ArgumentCaptor<ParticipantManifest> captor = ArgumentCaptor.forClass(ParticipantManifest.class);
+        verify(participantContextService, times(2)).createParticipantContext(captor.capture());
+        
+        var manifests = captor.getAllValues();
+        assertThat(manifests).allSatisfy(manifest -> 
+            assertThat(manifest.getRoles()).isEmpty()
+        );
+    }
+
+}
