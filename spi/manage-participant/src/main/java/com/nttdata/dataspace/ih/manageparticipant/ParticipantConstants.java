@@ -11,11 +11,12 @@ public class ParticipantConstants {
     public static final String SIGN_PC_CURVE_KEY = "edc.participant.keysign.curve";
     public static final String CREDENTIAL_SERVICE_URL_KEY = "edc.ih.credential.service.url";
     public static final String DSP_CALLBACK_ADDRESS_KEY = "edc.dsp.callback.address";
+    public static final String KEYPAIR_DS_NAME = "edc.sql.store.keypair.datasource";
     public static final String CREDENTIALS_API_PATH_KEY = "web.http.credentials.path";
     public static final String PROTOCOL_API_PATH_KEY = "web.http.protocol.path";
-
     public static final String KEY_OVERIDE_ENABLED_STRING = "edc.participant.key.override.enabled";
     public static final String KEY_OVERIDE_PRIVATE_KEY_STRING = "edc.participant.key.override.private";
+
     //Default paths
     // public static final String DEFAULT_CREDENTIALS_API_PATH = "/edc/ih/credentials/api";
     // public static final String DEFAULT_PROTOCOL_API_PATH = "/edc/cp/dsp/api";

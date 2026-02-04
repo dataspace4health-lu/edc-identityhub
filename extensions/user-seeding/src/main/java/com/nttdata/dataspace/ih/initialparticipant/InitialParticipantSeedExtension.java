@@ -6,6 +6,7 @@ import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextServ
 import org.eclipse.edc.identityhub.spi.participantcontext.model.KeyDescriptor;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantManifest;
 import org.eclipse.edc.runtime.metamodel.annotation.Inject;
+import org.eclipse.edc.runtime.metamodel.annotation.Setting;
 import org.eclipse.edc.spi.system.ServiceExtension;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.security.Vault;
@@ -25,6 +26,9 @@ import java.util.List;
 import java.util.Map;
 
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantServiceImpl;
+
+import okhttp3.MultipartBody.Part;
+
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantConstants;
 
 
@@ -32,6 +36,9 @@ import com.nttdata.dataspace.ih.manageparticipant.ParticipantConstants;
  * Extension to seed initial participants into the system.
  */
 public class InitialParticipantSeedExtension implements ServiceExtension {
+
+    @Setting(description = "The datasource to be used for keypair updates", defaultValue = DataSourceRegistry.DEFAULT_DATASOURCE, key = ParticipantConstants.KEYPAIR_DS_NAME)
+    private String dataSourceName;
 
     @Inject
     Monitor monitor;
@@ -323,7 +330,7 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         
         transactionContext.execute(() -> {
             try {
-                var dataSource = dataSourceRegistry.resolve("default");
+                var dataSource = dataSourceRegistry.resolve(dataSourceName);
                 try (var connection = dataSource.getConnection()) {
                     var sql = "UPDATE keypair_resource SET serialized_public_key = ? WHERE participant_context_id = ?";
                     var updated = queryExecutor.execute(connection, sql, publicKeyOnlyJson, participantId);

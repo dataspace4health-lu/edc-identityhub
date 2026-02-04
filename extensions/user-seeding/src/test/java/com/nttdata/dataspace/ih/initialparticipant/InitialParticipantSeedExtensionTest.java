@@ -1,13 +1,26 @@
 package com.nttdata.dataspace.ih.initialparticipant;
 
 import com.nttdata.dataspace.ih.manageparticipant.ParticipantConstants;
+import org.eclipse.edc.identityhub.spi.did.DidDocumentService;
+import org.eclipse.edc.identityhub.spi.did.model.DidResource;
+import org.eclipse.edc.identityhub.spi.did.store.DidResourceStore;
 import org.eclipse.edc.identityhub.spi.participantcontext.ParticipantContextService;
 import org.eclipse.edc.identityhub.spi.participantcontext.model.ParticipantManifest;
+import org.eclipse.edc.iam.did.spi.document.DidDocument;
+import org.eclipse.edc.iam.did.spi.document.VerificationMethod;
 import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
+import org.eclipse.edc.participantcontext.spi.types.ParticipantResource;
 import org.eclipse.edc.spi.monitor.Monitor;
+import org.eclipse.edc.spi.query.QuerySpec;
 import org.eclipse.edc.spi.result.ServiceResult;
+import org.eclipse.edc.spi.result.StoreResult;
+import org.eclipse.edc.spi.security.Vault;
 import org.eclipse.edc.spi.system.ServiceExtensionContext;
 import org.eclipse.edc.spi.system.configuration.Config;
+import org.eclipse.edc.sql.QueryExecutor;
+import org.eclipse.edc.transaction.datasource.spi.DataSourceRegistry;
+import org.eclipse.edc.transaction.spi.TransactionContext;
+import org.eclipse.edc.spi.result.Result;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -15,10 +28,20 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Stream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,6 +68,30 @@ class InitialParticipantSeedExtensionTest {
     private ParticipantContextConfigService participantContextConfigService;
 
     @Mock
+    private Vault vault;
+
+    @Mock
+    private DidDocumentService didDocumentService;
+
+    @Mock
+    private DidResourceStore didResourceStore;
+
+    @Mock
+    private DataSourceRegistry dataSourceRegistry;
+
+    @Mock
+    private TransactionContext transactionContext;
+
+    @Mock
+    private QueryExecutor queryExecutor;
+
+    @Mock
+    private DataSource dataSource;
+
+    @Mock
+    private Connection connection;
+
+    @Mock
     private Config config;
 
     private InitialParticipantSeedExtension extension;
@@ -68,6 +115,8 @@ class InitialParticipantSeedExtensionTest {
         lenient().when(config.getString(ParticipantConstants.DSP_CALLBACK_ADDRESS_KEY, null)).thenReturn(null);
         lenient().when(config.getString(ParticipantConstants.CREDENTIALS_API_PATH_KEY, null)).thenReturn("/api/v1/credentials");
         lenient().when(config.getString(ParticipantConstants.PROTOCOL_API_PATH_KEY, null)).thenReturn("/api/v1/protocol");
+        lenient().when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(false);
+        lenient().when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(null);
         lenient().when(context.getService(ParticipantContextService.class)).thenReturn(participantContextService);
         lenient().when(context.getService(ParticipantContextConfigService.class)).thenReturn(participantContextConfigService);
     }
@@ -176,4 +225,25 @@ class InitialParticipantSeedExtensionTest {
         verify(config).getString(ParticipantConstants.SIGN_PC_CURVE_KEY, ParticipantConstants.SIGN_SCHEME_ED25519);
     }
 
+    @Test
+    void startShouldNotOverrideKeysWhenDisabled() {
+        // Arrange
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(false);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - vault should never be called
+        verify(vault, never()).storeSecret(anyString(), anyString(), anyString());
+        verify(didResourceStore, never()).query(any(QuerySpec.class));
+        verify(didDocumentService, never()).publish(anyString());
+    }
+
 }
+
