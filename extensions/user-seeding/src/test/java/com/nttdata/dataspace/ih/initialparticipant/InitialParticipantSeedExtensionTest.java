@@ -547,6 +547,41 @@ class InitialParticipantSeedExtensionTest {
     }
 
     @Test
+    void overrideKeysShouldLogWarningWhenPublishFails() throws Exception {
+        // Arrange - Test uncovered line 304: publish failure warning
+        String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-x\",\"d\":\"test-d\"}";
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
+        when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        var didDocument = DidDocument.Builder.newInstance()
+                .id(PARTICIPANT1)
+                .verificationMethod(new ArrayList<>())
+                .authentication(new ArrayList<>())
+                .build();
+        var didResource = DidResource.Builder.newInstance()
+                .did(PARTICIPANT1)
+                .document(didDocument)
+                .build();
+        
+        when(didResourceStore.query(any(QuerySpec.class))).thenReturn(List.of(didResource));
+        when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.success());
+        when(didDocumentService.publish(anyString())).thenReturn(ServiceResult.badRequest("Publish failed"));
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - warning logged for publish failure
+        verify(monitor).warning("Failed to publish updated DID document: Publish failed");
+    }
+
+    @Test
     void didDocumentUpdateShouldHandleMissingDidResource() throws Exception {
         // Arrange
         String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"x\",\"d\":\"d\"}";
@@ -585,8 +620,8 @@ class InitialParticipantSeedExtensionTest {
 
     @Test
     void didDocumentUpdateShouldHandleInvalidJwk() throws Exception {
-        // Arrange - JWK missing required fields
-        String invalidPrivateKey = "{\"kty\":\"OKP\"}";
+        // Arrange - JWK missing required 'x' field (publicX will be null, covering line 240)
+        String invalidPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"d\":\"test-d\"}";
         when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
         when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(invalidPrivateKey);
         when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
@@ -623,7 +658,7 @@ class InitialParticipantSeedExtensionTest {
         // Act
         extension.start();
 
-        // Assert - warning logged
+        // Assert - warning logged for null check (line 240: if (publicX == null || kty == null || crv == null))
         verify(monitor).warning("Invalid JWK format - missing required fields for public key extraction");
         verify(didResourceStore, never()).update(any(DidResource.class));
     }
@@ -914,15 +949,13 @@ class InitialParticipantSeedExtensionTest {
         when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.success());
         when(didDocumentService.publish(anyString())).thenReturn(ServiceResult.success());
         
-        // Mock successful database update
-        when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
-        doAnswer(invocation -> {
-            Object arg = invocation.getArgument(0);
-            if (arg != null) {
-                ((TransactionBlock) arg).execute();
-            }
+        // Mock successful database update - this covers updateKeyPairInDatabase() method body
+        lenient().when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
+        lenient().when(dataSource.getConnection()).thenReturn(connection);
+        lenient().when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
+        lenient().doAnswer(invocation -> {
+            TransactionBlock block = invocation.getArgument(0);
+            block.execute(); // Execute the lambda to cover lines 331-347
             return null;
         }).when(transactionContext).execute(any(TransactionBlock.class));
         
@@ -931,7 +964,7 @@ class InitialParticipantSeedExtensionTest {
         // Act
         extension.start();
 
-        // Assert - verify complete successful flow
+        // Assert - verify complete successful flow including database update
         verify(vault).storeSecret(eq(PARTICIPANT1), anyString(), eq(testPrivateKey));
         verify(didResourceStore).update(any(DidResource.class));
         verify(didDocumentService).publish(PARTICIPANT1);
