@@ -38,6 +38,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
@@ -1086,6 +1087,186 @@ class InitialParticipantSeedExtensionTest {
 
         // Assert - error is logged for database operations
         verify(monitor).severe(eq("Failed to update keypair in database for participant " + PARTICIPANT1), any(Exception.class));
+    }
+
+    @Test
+    void startShouldSkipExistingParticipants() {
+        // Arrange
+        when(participantContextService.getParticipantContext(PARTICIPANT1)).thenReturn(ServiceResult.success(null));
+        when(participantContextService.getParticipantContext(PARTICIPANT2)).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - only PARTICIPANT2 should be created
+        verify(participantContextService, times(1)).createParticipantContext(any(ParticipantManifest.class));
+        verify(monitor).info("Participant already exists with ID '" + PARTICIPANT1 + "', will not re-create");
+    }
+
+    @Test
+    void overrideKeysShouldHandleDataSourceResolveFailure() throws Exception {
+        // Arrange
+        String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-x\",\"d\":\"test-d\"}";
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
+        when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        // Mock datasource resolution failure
+        when(dataSourceRegistry.resolve(anyString())).thenReturn(null);
+        doAnswer(invocation -> {
+            Object arg = invocation.getArgument(0);
+            if (arg != null) {
+                ((TransactionBlock) arg).execute();
+            }
+            return null;
+        }).when(transactionContext).execute(any(TransactionBlock.class));
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - error is logged
+        verify(monitor).severe(eq("Failed to update keypair in database for participant " + PARTICIPANT1), any(Exception.class));
+    }
+
+    @Test
+    void overrideKeysShouldHandleGetConnectionFailure() throws Exception {
+        // Arrange
+        String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-x\",\"d\":\"test-d\"}";
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
+        when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        // Mock connection failure
+        when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
+        when(dataSource.getConnection()).thenThrow(new java.sql.SQLException("Connection failed"));
+        doAnswer(invocation -> {
+            Object arg = invocation.getArgument(0);
+            if (arg != null) {
+                ((TransactionBlock) arg).execute();
+            }
+            return null;
+        }).when(transactionContext).execute(any(TransactionBlock.class));
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - SQL error is logged
+        verify(monitor).severe(eq("Failed to update keypair in database for participant " + PARTICIPANT1), any(Exception.class));
+    }
+
+    @Test
+    void overrideKeysShouldSkipAuthenticationUpdateWhenAlreadyPresent() throws Exception {
+        // Arrange
+        String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-x\",\"d\":\"test-d\"}";
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
+        when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        // Mock DID with authentication already containing the keyId
+        var authentication = new ArrayList<String>();
+        authentication.add(PARTICIPANT1 + "#key");
+        
+        var didDocument = DidDocument.Builder.newInstance()
+                .id(PARTICIPANT1)
+                .verificationMethod(new ArrayList<>())
+                .authentication(authentication)
+                .build();
+        var didResource = DidResource.Builder.newInstance()
+                .did(PARTICIPANT1)
+                .document(didDocument)
+                .build();
+        
+        when(didResourceStore.query(any(QuerySpec.class))).thenReturn(List.of(didResource));
+        when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.success());
+        when(didDocumentService.publish(anyString())).thenReturn(ServiceResult.success());
+        
+        // Mock database
+        when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
+        doAnswer(invocation -> {
+            Object arg = invocation.getArgument(0);
+            if (arg != null) {
+                ((TransactionBlock) arg).execute();
+            }
+            return null;
+        }).when(transactionContext).execute(any(TransactionBlock.class));
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - authentication array not modified (already contains the key)
+        verify(monitor, never()).info(contains("Added keyId to authentication array"));
+    }
+
+    @Test
+    void overrideKeysShouldHandleUpdateResultFailure() throws Exception {
+        // Arrange
+        String testPrivateKey = "{\"kty\":\"OKP\",\"crv\":\"Ed25519\",\"x\":\"test-x\",\"d\":\"test-d\"}";
+        when(config.getBoolean(ParticipantConstants.KEY_OVERIDE_ENABLED_STRING, false)).thenReturn(true);
+        when(config.getString(ParticipantConstants.KEY_OVERIDE_PRIVATE_KEY_STRING, null)).thenReturn(testPrivateKey);
+        when(config.getString(ParticipantConstants.PARTICIPANT_ID_KEY)).thenReturn(PARTICIPANT1);
+        when(participantContextService.getParticipantContext(anyString())).thenReturn(ServiceResult.notFound("Not found"));
+        when(participantContextService.createParticipantContext(any(ParticipantManifest.class)))
+                .thenReturn(ServiceResult.success(null));
+        when(participantContextConfigService.save(any())).thenReturn(ServiceResult.success());
+        
+        var didDocument = DidDocument.Builder.newInstance()
+                .id(PARTICIPANT1)
+                .verificationMethod(new ArrayList<>())
+                .authentication(new ArrayList<>())
+                .build();
+        var didResource = DidResource.Builder.newInstance()
+                .did(PARTICIPANT1)
+                .document(didDocument)
+                .build();
+        
+        when(didResourceStore.query(any(QuerySpec.class))).thenReturn(List.of(didResource));
+        when(didResourceStore.update(any(DidResource.class))).thenReturn(StoreResult.notFound("Not found"));
+        
+        // Mock database
+        when(dataSourceRegistry.resolve(anyString())).thenReturn(dataSource);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(queryExecutor.execute(any(Connection.class), anyString(), anyString(), anyString())).thenReturn(1);
+        doAnswer(invocation -> {
+            Object arg = invocation.getArgument(0);
+            if (arg != null) {
+                ((TransactionBlock) arg).execute();
+            }
+            return null;
+        }).when(transactionContext).execute(any(TransactionBlock.class));
+        
+        extension.initialize(context);
+
+        // Act
+        extension.start();
+
+        // Assert - warning logged for update failure
+        verify(monitor).warning(contains("Failed to update DID resource"));
+        verify(didDocumentService, never()).publish(anyString());
     }
 
 }
