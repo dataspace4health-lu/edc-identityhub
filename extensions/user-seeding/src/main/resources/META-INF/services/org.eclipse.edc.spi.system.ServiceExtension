@@ -12,5 +12,4 @@
 #
 #
 
-#com.nttdata.dataspace.ih.superuser.SuperUserSeedExtension
 com.nttdata.dataspace.ih.initialparticipant.InitialParticipantSeedExtension

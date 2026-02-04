@@ -60,6 +60,10 @@ dependencies {
 
     implementation(libs.edc.vault.hashicorp)
     
+    // SQL dependencies for database updates in extensions
+    implementation(libs.edc.lib.sql)
+    implementation(libs.edc.spi.transaction.datasource)
+    
     // Superuser seed extension
     runtimeOnly(project(":extensions:superuser-seed"))
     implementation(libs.edc.bom.identityhub.sql)

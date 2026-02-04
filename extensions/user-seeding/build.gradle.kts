@@ -6,11 +6,11 @@ dependencies {
     implementation(libs.edc.ih.spi.credentials)
     implementation(libs.edc.ih.spi)
     implementation(libs.edc.ih.core.participant)
-    implementation(libs.edc.bom.identityhub)
-    implementation(libs.edc.bom.identityhub.sql)
     implementation(libs.edc.ih.participant.validator)
     implementation(libs.edc.http.client)
     implementation(libs.edc.pc.core)
+    implementation(libs.edc.lib.sql)
+    implementation(libs.edc.spi.transaction.datasource)
 
     implementation(project(":services"))
     implementation(project(":spi"))

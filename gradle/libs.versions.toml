@@ -38,9 +38,11 @@ edc-ih-participant-validator = { module = "org.eclipse.edc:participant-context-v
 # EDC lib dependencies
 edc-lib-crypto = { module = "org.eclipse.edc:crypto-common-lib", version.ref = "edc" }
 edc-lib-keys = { module = "org.eclipse.edc:keys-lib", version.ref = "edc" }
+edc-lib-sql = { module = "org.eclipse.edc:sql-lib", version.ref = "edc" }
 
 # EDC SPI modules
 edc-spi-identity-did = { module = "org.eclipse.edc:identity-did-spi", version.ref = "edc" }
+edc-spi-transaction-datasource = { module = "org.eclipse.edc:transaction-datasource-spi", version.ref = "edc" }
 
 # Test dependencies
 edc-junit = { module = "org.eclipse.edc:junit", version.ref = "edc" }
