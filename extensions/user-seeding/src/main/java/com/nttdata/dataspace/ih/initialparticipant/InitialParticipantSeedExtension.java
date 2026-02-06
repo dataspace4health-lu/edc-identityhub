@@ -279,7 +279,10 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         monitor.info("Updating DID document: " + didDocument.getId() + " with new key: " + keyId);
         
         // Update the verification method with the new public key
+        var oldMethodCount = verificationMethods.size();
         verificationMethods.removeIf(vm -> vm.getId().equals(keyId));
+        monitor.info("Removed " + (oldMethodCount - verificationMethods.size()) + " old verification method(s) with keyId: " + keyId);
+        
         verificationMethods.add(VerificationMethod.Builder.newInstance()
                 .id(keyId)
                 .publicKeyJwk(publicKeyJwk)
@@ -292,6 +295,7 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         if (!authentication.contains(keyId)) {
             authentication.clear();
             authentication.add(keyId);
+            monitor.info("Added keyId to authentication array: " + keyId);
         }
         
         // Update the DID resource in the store
