@@ -13,9 +13,9 @@ import org.eclipse.edc.spi.security.Vault;
 import org.eclipse.edc.iam.did.spi.document.Service;
 import org.eclipse.edc.iam.did.spi.document.VerificationMethod;
 import org.eclipse.edc.participantcontext.spi.config.service.ParticipantContextConfigService;
+import org.eclipse.edc.participantcontext.spi.types.ParticipantResource;
 import org.eclipse.edc.identityhub.spi.did.DidDocumentService;
 import org.eclipse.edc.identityhub.spi.did.store.DidResourceStore;
-import org.eclipse.edc.keys.spi.KeyParserRegistry;
 import org.eclipse.edc.sql.QueryExecutor;
 import org.eclipse.edc.transaction.datasource.spi.DataSourceRegistry;
 import org.eclipse.edc.transaction.spi.TransactionContext;
@@ -54,9 +54,6 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
 
     @Inject
     private DidResourceStore didResourceStore;
-
-    @Inject
-    private KeyParserRegistry keyParserRegistry;
     
     @Inject
     private DataSourceRegistry dataSourceRegistry;
@@ -197,7 +194,13 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         
         if (privateKeyOverride != null && !privateKeyOverride.isEmpty()) {
             monitor.info("Overriding private key for participant: " + participantId);
-            vault.storeSecret(participantId, privateKeyAlias, privateKeyOverride);
+            
+            // Update the private key in vault
+            try {
+                vault.storeSecret(participantId, privateKeyAlias, privateKeyOverride);
+            } catch (Exception e) {
+                monitor.severe("Failed to update private key in vault for participant " + participantId, e);
+            }
             
             // Update the database keypair_resource table
             try {
@@ -206,7 +209,7 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
                 monitor.severe("Failed to update keypair in database for participant " + participantId, e);
             }
             
-            // Republish the DID document with the updated public key
+            // Update the DID document with the new public key
             try {
                 updateDidDocumentWithNewKey(participantId);
             } catch (Exception e) {
@@ -217,22 +220,26 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
     
     /**
      * Update the DID document with the new public key derived from the overridden private key.
-     * this method retrieves the DID document, updates the verification method with the new public key,
-     * @param participantId
-     * @throws Exception
+     * 
+     * NOTE: Manual DID manipulation is required here because:
+     * - KeyPairService (which triggers automatic DID updates via events) is an internal EDC component
+     * - It's not published in the public IdentityHub artifacts that extensions can depend on
+     * - Extensions must use DidDocumentService and DidResourceStore directly
+     * 
+     * @param participantId participant identifier
+     * @throws Exception if update fails
      */
     private void updateDidDocumentWithNewKey(String participantId) throws Exception {
         // Parse the new private key from JWK
         var objectMapper = new ObjectMapper();
-        var privateKeyJwk = objectMapper.readValue(privateKeyOverride, Map.class);
+        @SuppressWarnings("unchecked")
+        var privateKeyJwk = (Map<String, Object>) objectMapper.readValue(privateKeyOverride, Map.class);
         
         // Extract the public key coordinate from the JWK
         String publicX = (String) privateKeyJwk.get("x");
         String kty = (String) privateKeyJwk.get("kty");
         String crv = (String) privateKeyJwk.get("crv");
         String kid = (String) privateKeyJwk.get("kid");
-        
-        monitor.info("Extracted public key components - kty: " + kty + ", crv: " + crv + ", x: " + publicX);
         
         if (publicX == null || kty == null || crv == null) {
             monitor.warning("Invalid JWK format - missing required fields for public key extraction");
@@ -247,11 +254,9 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
             "kid", kid != null ? kid : participantId + "#key"
         );
         
-        monitor.info("Built public key JWK: " + objectMapper.writeValueAsString(publicKeyJwk));
-        
         // Find the DID document for this participant
         var didResourceList = didResourceStore.query(
-            org.eclipse.edc.participantcontext.spi.types.ParticipantResource.queryByParticipantContextId(participantId).build()
+            ParticipantResource.queryByParticipantContextId(participantId).build()
         );
         
         if (didResourceList.isEmpty()) {
@@ -262,26 +267,19 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         var didResource = didResourceList.iterator().next();
         var didDocument = didResource.getDocument();
         
-        // Extract keyId dynamically from existing verification methods or use the standard format
+        // Extract keyId from existing verification methods or use standard format
         String keyId;
         var verificationMethods = didDocument.getVerificationMethod();
         if (!verificationMethods.isEmpty()) {
-            // Use the existing verification method's keyId
             keyId = verificationMethods.get(0).getId();
-            monitor.info("Using existing verification method keyId: " + keyId);
         } else {
-            // Fallback to standard format (same as used during participant creation)
             keyId = ParticipantConstants.PARTICIPANT_PUBLIC_KEY_ALIAS_FORMAT.formatted(participantId);
-            monitor.info("No existing verification methods found, using standard keyId format: " + keyId);
         }
         
-        monitor.info("Found DID document: " + didDocument.getId() + " with " + verificationMethods.size() + " verification methods");
+        monitor.info("Updating DID document: " + didDocument.getId() + " with new key: " + keyId);
         
         // Update the verification method with the new public key
-        var oldMethodCount = verificationMethods.size();
         verificationMethods.removeIf(vm -> vm.getId().equals(keyId));
-        monitor.info("Removed " + (oldMethodCount - verificationMethods.size()) + " old verification method(s) with keyId: " + keyId);
-        
         verificationMethods.add(VerificationMethod.Builder.newInstance()
                 .id(keyId)
                 .publicKeyJwk(publicKeyJwk)
@@ -289,12 +287,11 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
                 .type("JsonWebKey2020")
                 .build());
         
-        // Add the key to authentication array for token verification
+        // Update authentication array
         var authentication = didDocument.getAuthentication();
         if (!authentication.contains(keyId)) {
-            authentication.clear();  // Clear old references
+            authentication.clear();
             authentication.add(keyId);
-            monitor.info("Added keyId to authentication array: " + keyId);
         }
         
         // Update the DID resource in the store
@@ -326,8 +323,9 @@ public class InitialParticipantSeedExtension implements ServiceExtension {
         String publicKeyOnlyJson;
         try {
             var objectMapper = new ObjectMapper();
-            var jwk = objectMapper.readValue(privateKeyOverride, Map.class);
-            var publicJwk = new HashMap<>(jwk);
+            @SuppressWarnings("unchecked")
+            var jwk = (Map<String, Object>) objectMapper.readValue(privateKeyOverride, Map.class);
+            var publicJwk = new HashMap<String, Object>(jwk);
             publicJwk.remove("d"); // Remove private key parameter
             publicKeyOnlyJson = objectMapper.writeValueAsString(publicJwk);
             monitor.info("Extracted public key JWK (without private 'd' parameter) for database storage");
